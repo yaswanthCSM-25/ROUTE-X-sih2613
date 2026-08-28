@@ -6,7 +6,9 @@ import MetricsComparison from './components/MetricsComparison';
 import ConvergenceChart from './components/ConvergenceChart';
 import VehicleRoutesTable from './components/VehicleRoutesTable';
 import VehicleSimulator from './components/VehicleSimulator';
+import IncidentSimulator from './components/IncidentSimulator';
 import DeliverablesModal from './components/DeliverablesModal';
+import BatchBenchmarkModal from './components/BatchBenchmarkModal';
 import {
   fetchHealth,
   fetchProjectInfo,
@@ -15,16 +17,18 @@ import {
   fetchTraffic,
   fetchVehicles,
   optimizeRoutes,
+  injectIncident,
 } from './services/api';
 
 export default function App() {
   const [backendOnline, setBackendOnline] = useState(false);
   const [projectInfo, setProjectInfo] = useState(null);
   const [scenarios, setScenarios] = useState([
-    { id: 'demo', name: 'Standard 9-Node' },
-    { id: 'rush_hour', name: 'Rush Hour Congestion' },
+    { id: 'demo', name: '9-Node Demo' },
+    { id: 'rush_hour', name: 'Rush Hour Surge' },
     { id: 'bridge_closure', name: 'Bridge Closure Detour' },
-    { id: 'smart_grid', name: '16-Node City Grid' },
+    { id: 'smart_grid', name: '16-Node Grid' },
+    { id: 'metropolitan', name: '30-Node Metro' },
   ]);
   const [currentPreset, setCurrentPreset] = useState('demo');
 
@@ -32,23 +36,29 @@ export default function App() {
   const [network, setNetwork] = useState(null);
   const [traffic, setTraffic] = useState(null);
   const [vehicles, setVehicles] = useState([]);
+  const [fleetSize, setFleetSize] = useState(5);
   const [roadOverrides, setRoadOverrides] = useState({});
+  const [baselineMethod, setBaselineMethod] = useState('dijkstra');
 
-  // Optimization params & weights
+  // Optimization params, weights & BPR parameters
   const [params, setParams] = useState({
     num_particles: 20,
     num_iterations: 50,
     traffic_seed: 42,
-    steps_per_vehicle: 12,
   });
   const [weights, setWeights] = useState({
     alpha: 0.40,
     beta: 0.30,
     gamma: 0.30,
   });
+  const [bprParams, setBprParams] = useState({
+    alpha: 0.15,
+    beta: 4.0,
+  });
 
-  // Benchmark results
+  // Benchmark results & Incident state
   const [benchmark, setBenchmark] = useState(null);
+  const [incidentResult, setIncidentResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
 
@@ -57,6 +67,7 @@ export default function App() {
   const [showBaselineOverlay, setShowBaselineOverlay] = useState(true);
   const [showQpsoOverlay, setShowQpsoOverlay] = useState(true);
   const [isDeliverablesOpen, setIsDeliverablesOpen] = useState(false);
+  const [isBatchBenchmarkOpen, setIsBatchBenchmarkOpen] = useState(false);
 
   // Simulation playback state
   const [isSimulating, setIsSimulating] = useState(false);
@@ -76,7 +87,6 @@ export default function App() {
       const scen = await fetchScenarios();
       if (scen?.scenarios?.length) setScenarios(scen.scenarios);
 
-      // Load initial demo
       await loadScenario('demo');
     }
     init();
@@ -87,19 +97,22 @@ export default function App() {
     setCurrentPreset(presetId);
     setRoadOverrides({});
     setSelectedVehicleId(null);
+    setIncidentResult(null);
     setSimProgress(0);
     setIsSimulating(false);
+
+    const defaultCount = presetId === 'metropolitan' ? 20 : (presetId === 'smart_grid' ? 10 : 5);
+    setFleetSize(defaultCount);
 
     try {
       const net = await fetchNetwork(presetId);
       const traf = await fetchTraffic(presetId, params.traffic_seed);
-      const veh = await fetchVehicles(presetId);
+      const veh = await fetchVehicles(presetId, defaultCount);
 
       setNetwork(net);
       setTraffic(traf);
       setVehicles(veh?.vehicles || []);
 
-      // Auto run optimization for fresh scenario
       runOptimizationWithConfig({
         preset: presetId,
         num_particles: params.num_particles,
@@ -107,8 +120,11 @@ export default function App() {
         traffic_seed: params.traffic_seed,
         weights,
         custom_vehicles: veh?.vehicles || [],
+        fleet_size: defaultCount,
         road_status_overrides: {},
-        steps_per_vehicle: presetId === 'smart_grid' ? 18 : 12,
+        baseline_method: baselineMethod,
+        bpr_alpha: bprParams.alpha,
+        bpr_beta: bprParams.beta,
       });
     } catch (err) {
       console.error('Failed to load scenario:', err);
@@ -147,7 +163,10 @@ export default function App() {
       weights,
       road_status_overrides: roadOverrides,
       custom_vehicles: vehicles,
-      steps_per_vehicle: currentPreset === 'smart_grid' ? 18 : 12,
+      fleet_size: fleetSize,
+      baseline_method: baselineMethod,
+      bpr_alpha: bprParams.alpha,
+      bpr_beta: bprParams.beta,
     });
   };
 
@@ -178,7 +197,6 @@ export default function App() {
       setNetwork({ ...network, roads: updatedRoads });
     }
 
-    // Trigger re-optimization immediately
     runOptimizationWithConfig({
       preset: currentPreset,
       num_particles: params.num_particles,
@@ -187,8 +205,33 @@ export default function App() {
       weights,
       road_status_overrides: updatedOverrides,
       custom_vehicles: vehicles,
-      steps_per_vehicle: currentPreset === 'smart_grid' ? 18 : 12,
+      fleet_size: fleetSize,
+      baseline_method: baselineMethod,
+      bpr_alpha: bprParams.alpha,
+      bpr_beta: bprParams.beta,
     });
+  };
+
+  // Dynamic Incident Injection
+  const handleInjectIncident = async (incidentPayload) => {
+    setIsLoading(true);
+    try {
+      const res = await injectIncident(incidentPayload);
+      setIncidentResult(res);
+      if (res.post_incident) {
+        setBenchmark(res.post_incident);
+        if (res.post_incident.network) setNetwork(res.post_incident.network);
+      }
+    } catch (err) {
+      console.error('Incident injection error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearIncidents = () => {
+    setIncidentResult(null);
+    loadScenario(currentPreset);
   };
 
   // Vehicle Fleet management
@@ -255,6 +298,7 @@ export default function App() {
         currentPreset={currentPreset}
         onSelectPreset={loadScenario}
         onOpenDeliverables={() => setIsDeliverablesOpen(true)}
+        onOpenBatchBenchmark={() => setIsBatchBenchmarkOpen(true)}
       />
 
       {/* Main Grid Content */}
@@ -267,6 +311,47 @@ export default function App() {
             weights={weights}
             onChangeWeights={setWeights}
             vehicles={vehicles}
+            fleetSize={fleetSize}
+            onChangeFleetSize={(sz) => {
+              setFleetSize(sz);
+              fetchVehicles(currentPreset, sz).then((v) => {
+                if (v?.vehicles) {
+                  setVehicles(v.vehicles);
+                  runOptimizationWithConfig({
+                    preset: currentPreset,
+                    num_particles: params.num_particles,
+                    num_iterations: params.num_iterations,
+                    traffic_seed: params.traffic_seed,
+                    weights,
+                    custom_vehicles: v.vehicles,
+                    fleet_size: sz,
+                    road_status_overrides: roadOverrides,
+                    baseline_method: baselineMethod,
+                    bpr_alpha: bprParams.alpha,
+                    bpr_beta: bprParams.beta,
+                  });
+                }
+              });
+            }}
+            baselineMethod={baselineMethod}
+            onChangeBaselineMethod={(m) => {
+              setBaselineMethod(m);
+              runOptimizationWithConfig({
+                preset: currentPreset,
+                num_particles: params.num_particles,
+                num_iterations: params.num_iterations,
+                traffic_seed: params.traffic_seed,
+                weights,
+                custom_vehicles: vehicles,
+                fleet_size: fleetSize,
+                road_status_overrides: roadOverrides,
+                baseline_method: m,
+                bpr_alpha: bprParams.alpha,
+                bpr_beta: bprParams.beta,
+              });
+            }}
+            bprParams={bprParams}
+            onChangeBprParams={setBprParams}
             onAddVehicle={handleAddVehicle}
             onRemoveVehicle={handleRemoveVehicle}
             onUpdateVehicle={handleUpdateVehicle}
@@ -281,6 +366,16 @@ export default function App() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* Key Metrics Comparison */}
           <MetricsComparison benchmark={benchmark} />
+
+          {/* Dynamic Incident Simulator Bar */}
+          <IncidentSimulator
+            roads={network?.roads || []}
+            currentPreset={currentPreset}
+            onInjectIncident={handleInjectIncident}
+            onClearIncidents={handleClearIncidents}
+            incidentResult={incidentResult}
+            isLoading={isLoading}
+          />
 
           {/* Interactive Map Visualizer */}
           <NetworkMap
@@ -332,11 +427,19 @@ export default function App() {
         </div>
       </main>
 
-      {/* Deliverables & Mathematical Formulation Modal */}
+      {/* Deliverables Modal */}
       <DeliverablesModal
         isOpen={isDeliverablesOpen}
         onClose={() => setIsDeliverablesOpen(false)}
         info={projectInfo}
+      />
+
+      {/* Multi-Seed Batch Repeatability Modal */}
+      <BatchBenchmarkModal
+        isOpen={isBatchBenchmarkOpen}
+        onClose={() => setIsBatchBenchmarkOpen(false)}
+        currentPreset={currentPreset}
+        fleetSize={fleetSize}
       />
     </div>
   );

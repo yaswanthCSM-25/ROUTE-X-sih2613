@@ -1,12 +1,13 @@
 import React from 'react';
-import { Activity, Cpu, Sparkles, BookOpen, Layers, ShieldCheck } from 'lucide-react';
+import { Activity, Cpu, Sparkles, BookOpen, Layers, BarChart2 } from 'lucide-react';
 
 export default function Header({ 
   backendOnline, 
   scenarios, 
   currentPreset, 
   onSelectPreset, 
-  onOpenDeliverables 
+  onOpenDeliverables,
+  onOpenBatchBenchmark,
 }) {
   return (
     <header style={{
@@ -29,7 +30,7 @@ export default function Header({
         gap: 16,
       }}>
         {/* Branding & Problem ID */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
             width: 44,
             height: 44,
@@ -55,7 +56,7 @@ export default function Header({
               </span>
             </div>
             <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>
-              Quantum-Inspired Metaheuristic Traffic Optimization (QPSO vs. Dijkstra Baseline)
+              Quantum-Inspired Particle Swarm Optimization (QPSO) vs. Classical Baseline
             </p>
           </div>
         </div>
@@ -99,12 +100,22 @@ export default function Header({
         </div>
 
         {/* Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Multi-Seed Batch Benchmark */}
+          <button
+            onClick={onOpenBatchBenchmark}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
+          >
+            <BarChart2 size={14} />
+            <span>5-Seed Benchmark</span>
+          </button>
+
           {/* Deliverables / Spec Button */}
           <button
             onClick={onOpenDeliverables}
             className="btn btn-secondary btn-sm"
-            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
           >
             <BookOpen size={14} />
             <span>SIH26137 Spec & Deliverables</span>

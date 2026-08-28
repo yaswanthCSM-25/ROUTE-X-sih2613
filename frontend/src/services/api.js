@@ -1,5 +1,5 @@
 /**
- * api.js — REST Client for Route Planner Backend API
+ * api.js — REST Client for Route Planner Backend API (SIH26137)
  */
 
 const API_BASE = '/api';
@@ -59,9 +59,10 @@ export async function fetchTraffic(preset = 'demo', seed = 42) {
   }
 }
 
-export async function fetchVehicles(preset = 'demo') {
+export async function fetchVehicles(preset = 'demo', count = null) {
   try {
-    const res = await fetch(`${API_BASE}/vehicles?preset=${encodeURIComponent(preset)}`);
+    const url = count ? `${API_BASE}/vehicles?preset=${encodeURIComponent(preset)}&count=${count}` : `${API_BASE}/vehicles?preset=${encodeURIComponent(preset)}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch vehicles');
     return await res.json();
   } catch (err) {
@@ -82,6 +83,40 @@ export async function optimizeRoutes(payload) {
   if (!res.ok) {
     const errorText = await res.text();
     throw new Error(`Optimization error: ${errorText}`);
+  }
+
+  return await res.json();
+}
+
+export async function injectIncident(payload) {
+  const res = await fetch(`${API_BASE}/simulation/incident`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Incident simulation error: ${errorText}`);
+  }
+
+  return await res.json();
+}
+
+export async function runBatchBenchmark(payload) {
+  const res = await fetch(`${API_BASE}/benchmark/batch`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Batch benchmark error: ${errorText}`);
   }
 
   return await res.json();

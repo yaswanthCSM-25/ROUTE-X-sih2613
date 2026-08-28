@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Eye, EyeOff, AlertTriangle, ShieldCheck, Navigation, Play, Pause, RotateCcw } from 'lucide-react';
+import { Eye, EyeOff, AlertTriangle, ShieldCheck, Navigation } from 'lucide-react';
 
 export default function NetworkMap({
   network,
@@ -60,15 +60,6 @@ export default function NetworkMap({
     };
   }, [network]);
 
-  // Congestion lookup
-  const congestionMap = useMemo(() => {
-    const map = {};
-    (traffic?.traffic || []).forEach((t) => {
-      map[`${t.source}->${t.target}`] = t.congestion;
-    });
-    return map;
-  }, [traffic]);
-
   const getCongestionColor = (c) => {
     if (c === undefined || c === null) return '#10b981';
     if (c < 0.35) return '#10b981'; // Green
@@ -113,10 +104,10 @@ export default function NetworkMap({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h3 style={{ fontSize: '1.05rem', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Navigation size={18} color="#10b981" /> Interactive Transportation Network Visualizer
+            <Navigation size={18} color="#10b981" /> Transportation Network Graph & Traffic Flow
           </h3>
           <p style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
-            Live traffic heatmap • Click any road to toggle <span style={{ color: '#f43f5e', fontWeight: 600 }}>CLOSED/OPEN</span> status
+            BPR congestion heatmaps • Click road to toggle <span style={{ color: '#f43f5e', fontWeight: 600 }}>CLOSED/OPEN</span> status
           </p>
         </div>
 
@@ -135,7 +126,7 @@ export default function NetworkMap({
             }}
           >
             {showBaselineOverlay ? <Eye size={13} /> : <EyeOff size={13} />}
-            <span>Dijkstra Baseline</span>
+            <span>Dijkstra / A* Baseline</span>
           </button>
 
           {/* QPSO Overlay Toggle */}
@@ -165,7 +156,7 @@ export default function NetworkMap({
             border: '1px solid rgba(255, 255, 255, 0.06)',
             fontSize: '0.72rem',
           }}>
-            <span style={{ color: '#64748b' }}>Congestion:</span>
+            <span style={{ color: '#64748b' }}>BPR Load:</span>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
             <span style={{ color: '#10b981' }}>Low</span>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b' }} />
@@ -220,11 +211,10 @@ export default function NetworkMap({
             const v = nodeMap[road.target];
             if (!u || !v) return null;
 
-            const congFwd = congestionMap[`${road.source}->${road.target}`] ?? 0;
-            const congBwd = congestionMap[`${road.target}->${road.source}`] ?? 0;
-            const avgCong = (congFwd + congBwd) / 2;
-            const color = getCongestionColor(avgCong);
+            const cong = road.congestion ?? 0.2;
+            const color = getCongestionColor(cong);
             const isClosed = road.status === 'CLOSED';
+            const load = road.load || 0;
             const isHovered = hoveredRoad && (
               (hoveredRoad.source === road.source && hoveredRoad.target === road.target) ||
               (hoveredRoad.source === road.target && hoveredRoad.target === road.source)
@@ -238,7 +228,7 @@ export default function NetworkMap({
                 onMouseEnter={() => setHoveredRoad(road)}
                 onMouseLeave={() => setHoveredRoad(null)}
               >
-                {/* Thick clickable transparent hit zone */}
+                {/* Hit zone */}
                 <line
                   x1={u.x}
                   y1={u.y}
@@ -268,22 +258,22 @@ export default function NetworkMap({
                   x2={v.x}
                   y2={v.y}
                   stroke={isClosed ? '#475569' : color}
-                  strokeWidth={isClosed ? 3 : 4}
+                  strokeWidth={isClosed ? 3 : Math.min(8, 4 + load * 0.8)}
                   strokeDasharray={isClosed ? '6,6' : 'none'}
                   strokeOpacity={isClosed ? 0.6 : 0.85}
                   strokeLinecap="round"
                 />
 
-                {/* Midpoint Label (Distance & Congestion) */}
+                {/* Midpoint Road Badge */}
                 <g transform={`translate(${(u.x + v.x) / 2}, ${(u.y + v.y) / 2})`}>
                   <rect
-                    x="-20"
-                    y="-10"
-                    width="40"
-                    height="20"
+                    x="-24"
+                    y="-11"
+                    width="48"
+                    height="22"
                     rx="6"
-                    fill="rgba(8, 12, 22, 0.85)"
-                    stroke={isClosed ? '#f43f5e' : 'rgba(255, 255, 255, 0.12)'}
+                    fill="rgba(8, 12, 22, 0.88)"
+                    stroke={isClosed ? '#f43f5e' : (load > 0 ? '#10b981' : 'rgba(255, 255, 255, 0.12)')}
                     strokeWidth="1"
                   />
                   <text
@@ -294,7 +284,7 @@ export default function NetworkMap({
                     fontWeight="600"
                     fontFamily="JetBrains Mono"
                   >
-                    {isClosed ? 'CLOSED' : `${road.distance_km}km`}
+                    {isClosed ? '⛔ CLOSED' : `${road.distance_km}k ${load > 0 ? `[${load}]` : ''}`}
                   </text>
                 </g>
               </g>
@@ -394,7 +384,7 @@ export default function NetworkMap({
                 onMouseLeave={() => setHoveredNode(null)}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Halo */}
+                {/* Outer Ring */}
                 <circle
                   r={isHovered ? '18' : '14'}
                   fill="rgba(15, 23, 42, 0.95)"
@@ -423,7 +413,7 @@ export default function NetworkMap({
           })}
         </svg>
 
-        {/* Hover Tooltip Overlay */}
+        {/* Hover Tooltip */}
         {(hoveredRoad || hoveredNode) && (
           <div style={{
             position: 'absolute',
@@ -445,7 +435,8 @@ export default function NetworkMap({
                   Road Segment: {hoveredRoad.source} ↔ {hoveredRoad.target}
                 </div>
                 <div>Distance: <strong style={{ color: '#38bdf8' }}>{hoveredRoad.distance_km} km</strong> | Speed: {hoveredRoad.speed_kmph || 40} km/h</div>
-                <div>Capacity: {hoveredRoad.capacity || 6} vehicles | Status: <strong style={{ color: hoveredRoad.status === 'CLOSED' ? '#f43f5e' : '#10b981' }}>{hoveredRoad.status}</strong></div>
+                <div>Capacity: {hoveredRoad.capacity || 6} vehicles | Load: <strong style={{ color: '#34d399' }}>{hoveredRoad.load || 0} vehicles</strong></div>
+                <div>BPR Delay: <strong style={{ color: '#f59e0b' }}>{hoveredRoad.actual_time_min} min</strong> (Free-flow: {hoveredRoad.free_time_min} min)</div>
                 <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 3 }}>
                   ⚡ Click road to toggle OPEN / CLOSED
                 </div>

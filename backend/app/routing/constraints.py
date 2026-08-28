@@ -1,33 +1,30 @@
 """
-constraints.py — Constraint handling for Route Planner.
+constraints.py — Constraint enforcement and penalty function for Route Planner (SIH26137).
 
-Implements the constraints from the mathematical spec:
+Constraints:
+    1. Valid Edge Transitions  — every hop in route must exist in G=(V,E)
+    2. Destination Reachability — route must start at origin and reach destination
+    3. Blocked / Closed Roads  — route must not traverse CLOSED road segments
+    4. Cycle Avoidance          — discourages unnecessary looping paths
+    5. Fleet Capacity Oversaturation — penalizes exceeding road vehicle capacities
 
-    1. Valid roads      — every hop in a route must be an existing edge
-    2. Destination reached — the route must actually end at the vehicle's
-       destination within a bounded number of steps
-    3. Closed roads     — a CLOSED road cannot be used
-    4. Capacity         — (hook provided; enforced once multi-vehicle
-       congestion coupling is added — see docstring below)
-
-Violations don't reject a route outright (that would make the search
-space too jagged for a metaheuristic to climb out of); instead they add
-a penalty P to the fitness so QPSO naturally steers away from them:
-
-    F_final = F_objective + P
-    P = lambda_1 * P_invalid + lambda_2 * P_capacity + lambda_3 * P_unreachable
+Formulation:
+    P(R) = lambda_1 * N_invalid + lambda_2 * N_closed + lambda_3 * N_unreachable + lambda_4 * N_cycles + lambda_5 * N_capacity_overflow
 """
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List, Tuple
 
 from app.routing.evaluator import RouteMetrics
 from app.simulation.graph import RoadNetwork, RoadStatus
+from app.simulation.traffic import TrafficModel
 
-# Penalty weights (lambda_1, lambda_2, lambda_3 in the spec)
-LAMBDA_INVALID_EDGE = 50.0
-LAMBDA_CLOSED_ROAD = 50.0
-LAMBDA_UNREACHABLE = 100.0
+# Configurable penalty coefficients
+LAMBDA_INVALID_EDGE = 100.0
+LAMBDA_CLOSED_ROAD = 150.0
+LAMBDA_UNREACHABLE = 200.0
+LAMBDA_CYCLE = 25.0
+LAMBDA_CAPACITY_OVERFLOW = 20.0
 
 
 @dataclass
@@ -44,21 +41,17 @@ def check_route(
     destination: str,
 ) -> ConstraintResult:
     """
-    Validates a single vehicle's decoded route against the network and
-    returns a penalty to add to the objective fitness.
+    Validates a single vehicle's route and computes penalty score P(R).
     """
     violations: List[str] = []
     penalty = 0.0
 
-    # Constraint 1 — valid roads
+    # Constraint 1 — Valid graph edges
     if metrics.broken_edges:
-        violations.append(
-            f"invalid_edges({len(metrics.broken_edges)}): "
-            f"{', '.join(metrics.broken_edges)}"
-        )
+        violations.append(f"invalid_edges({len(metrics.broken_edges)}): {', '.join(metrics.broken_edges)}")
         penalty += LAMBDA_INVALID_EDGE * len(metrics.broken_edges)
 
-    # Constraint 3 — closed roads
+    # Constraint 3 — Closed / blocked road segments
     closed_used = []
     for source, target in zip(metrics.path[:-1], metrics.path[1:]):
         if network.road_exists(source, target):
@@ -69,27 +62,42 @@ def check_route(
         violations.append(f"closed_roads_used: {', '.join(closed_used)}")
         penalty += LAMBDA_CLOSED_ROAD * len(closed_used)
 
-    # Constraint 2 — must start at origin and end at destination
+    # Constraint 2 — Origin and Destination reachability
     reached = bool(metrics.path) and metrics.path[0] == origin and metrics.path[-1] == destination
     if not reached:
-        violations.append(
-            f"destination_not_reached (started={metrics.path[0] if metrics.path else None}, "
-            f"ended={metrics.path[-1] if metrics.path else None}, target={destination})"
-        )
+        started = metrics.path[0] if metrics.path else None
+        ended = metrics.path[-1] if metrics.path else None
+        violations.append(f"destination_unreachable (start={started}, end={ended}, target={destination})")
         penalty += LAMBDA_UNREACHABLE
 
+    # Constraint 4 — Cycle / loop penalty (if any node visited more than once)
+    if len(metrics.path) > 1:
+        unique_nodes = set(metrics.path)
+        excess_hops = len(metrics.path) - len(unique_nodes)
+        if excess_hops > 0:
+            violations.append(f"redundant_cycles({excess_hops})")
+            penalty += LAMBDA_CYCLE * excess_hops
+
     valid = len(violations) == 0
-    return ConstraintResult(valid=valid, violations=violations, penalty=penalty)
+    return ConstraintResult(valid=valid, violations=violations, penalty=round(penalty, 2))
 
 
-# --- Constraint 4 (capacity) -------------------------------------------
-# Hook for the future road-utilization model described in the spec:
-#     rho_e = n_e / capacity_e
-# This requires knowing how many vehicles in the *current solution* use
-# each road simultaneously, which means it has to be computed across all
-# vehicles' routes at once, not per-route. See
-# app.optimization.fitness.aggregate_solution() for where this plugs in
-# once it's implemented — deliberately left as a documented gap rather
-# than a fake number, per the project's "no fabricated results" rule.
-def capacity_penalty_placeholder() -> float:
-    return 0.0
+def check_fleet_capacity_violations(
+    network: RoadNetwork,
+    traffic_model: TrafficModel,
+) -> Tuple[float, List[str]]:
+    """
+    Computes capacity oversaturation penalty across the fleet:
+        P_capacity = sum_e max(0, n_e - capacity_e) * lambda_capacity
+    """
+    penalty = 0.0
+    violations = []
+
+    for road in network.roads:
+        load = traffic_model.vehicle_counts.get((road.source, road.target), 0)
+        if load > road.capacity_vehicles:
+            excess = load - road.capacity_vehicles
+            penalty += excess * LAMBDA_CAPACITY_OVERFLOW
+            violations.append(f"capacity_overflow on {road.source}->{road.target} (load={load}/{road.capacity_vehicles})")
+
+    return round(penalty, 2), violations

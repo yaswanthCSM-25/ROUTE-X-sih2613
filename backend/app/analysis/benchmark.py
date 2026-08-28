@@ -1,18 +1,18 @@
 """
-benchmark.py — Runs the classical baseline and QPSO on the same scenario
-and produces a fair, side-by-side comparison. Writes:
+benchmark.py — Benchmarking suite comparing Classical Baseline (Dijkstra/A*) vs QPSO (SIH26137).
 
-    outputs/convergence.csv   iteration, best_fitness
-    outputs/benchmark.json    baseline vs QPSO totals + runtime
-    outputs/routes.json       every vehicle's route from both methods
+Produces measurable, non-fabricated metrics:
+    - Distance, Time, Congestion, Penalties, and Objective Fitness
+    - Percentage improvements: ((baseline - qpso) / baseline) * 100
+    - Multi-seed batch repeatability analysis
 """
 
 import csv
 import json
+import statistics
 import time
-from dataclasses import asdict
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from app.optimization.baseline import BaselineResult, run_baseline
 from app.optimization.calibration import CalibrationBounds, calibrate
@@ -23,33 +23,46 @@ from app.simulation.traffic import TrafficModel
 from app.simulation.vehicles import Vehicle
 
 
-def _baseline_totals(results: List[BaselineResult]):
+def _baseline_totals(results: List[BaselineResult]) -> dict:
     d = t = c = 0.0
     unreachable = 0
+    valid_count = 0
+
     for r in results:
-        if r.metrics is None:
+        if r.metrics is None or not r.path:
             unreachable += 1
             continue
         d += r.metrics.distance_km
         t += r.metrics.time_min
         c += r.metrics.congestion
+        valid_count += 1
+
     return {
         "distance_total_km": round(d, 2),
         "time_total_min": round(t, 2),
         "congestion_total": round(c, 2),
+        "avg_time_min": round(t / max(1, valid_count), 2),
+        "avg_distance_km": round(d / max(1, valid_count), 2),
+        "avg_congestion": round(c / max(1, valid_count), 3),
         "unreachable_vehicles": unreachable,
     }
 
 
-def _qpso_totals(solution: FullSolution):
+def _qpso_totals(solution: FullSolution) -> dict:
     invalid = sum(1 for vs in solution.vehicle_solutions if not vs.constraint.valid)
+    num_veh = len(solution.vehicle_solutions)
+
     return {
         "distance_total_km": round(solution.totals.distance_total, 2),
         "time_total_min": round(solution.totals.time_total, 2),
         "congestion_total": round(solution.totals.congestion_total, 2),
         "penalty_total": round(solution.totals.penalty_total, 2),
+        "avg_time_min": round(solution.totals.time_total / max(1, num_veh), 2),
+        "avg_distance_km": round(solution.totals.distance_total / max(1, num_veh), 2),
+        "avg_congestion": round(solution.totals.congestion_total / max(1, num_veh), 3),
         "fitness": round(solution.fitness, 4),
         "invalid_routes": invalid,
+        "capacity_violations": solution.capacity_violations,
     }
 
 
@@ -62,18 +75,22 @@ def run_benchmark(
     num_iterations: int = 50,
     weights: Optional[dict] = None,
     seed: int = 42,
+    baseline_method: str = "dijkstra",
     output_dir: str = "outputs",
 ) -> dict:
+    """
+    Executes an end-to-end benchmark comparison between Classical Baseline and QPSO.
+    """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # --- Baseline ---------------------------------------------------
+    # 1. Classical Baseline
     t0 = time.perf_counter()
-    baseline_results = run_baseline(network, vehicles, traffic_model)
+    baseline_results = run_baseline(network, vehicles, traffic_model, method=baseline_method)
     baseline_runtime = time.perf_counter() - t0
     baseline_summary = _baseline_totals(baseline_results)
 
-    # --- Calibration (fixed normalization bounds, shared by QPSO) ---
+    # 2. Calibration Bounds (T/D/C normalization)
     known_good = (
         baseline_summary["time_total_min"],
         baseline_summary["distance_total_km"],
@@ -81,10 +98,10 @@ def run_benchmark(
     )
     bounds = calibrate(
         network, traffic_model, vehicles, steps_per_vehicle,
-        known_good_totals=known_good,
+        known_good_totals=known_good, seed=seed,
     )
 
-    # --- QPSO ---------------------------------------------------------
+    # 3. QPSO Optimization
     dimensions = len(vehicles) * steps_per_vehicle
 
     def fitness_fn(position: List[float]) -> float:
@@ -110,12 +127,14 @@ def run_benchmark(
     )
     qpso_summary = _qpso_totals(best_solution)
 
-    # --- Write outputs -----------------------------------------------
+    # 4. Write Output Artifacts
     with open(out / "convergence.csv", "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["iteration", "best_fitness"])
-        for i, fitness in enumerate(qpso_result.convergence):
-            writer.writerow([i, round(fitness, 6)])
+        writer.writerow(["iteration", "best_fitness", "mean_fitness", "diversity"])
+        for i, (b_fit, m_fit, div) in enumerate(
+            zip(qpso_result.convergence, qpso_result.mean_convergence, qpso_result.diversity_history)
+        ):
+            writer.writerow([i, b_fit, m_fit, div])
 
     routes_payload = {
         "baseline": [
@@ -146,16 +165,33 @@ def run_benchmark(
     with open(out / "routes.json", "w") as f:
         json.dump(routes_payload, f, indent=2)
 
-    # Percentage delta calculations
-    def calc_delta(b_val, q_val):
-        if b_val == 0:
+    # 5. Improvement percentages: ((baseline - qpso) / baseline) * 100
+    def calc_improvement(b_val: float, q_val: float) -> float:
+        if b_val <= 0:
             return 0.0
-        return round(((q_val - b_val) / b_val) * 100, 2)
+        # Positive percentage means QPSO reduced the cost (better!)
+        return round(((b_val - q_val) / b_val) * 100, 2)
 
     comparison_payload = {
-        "distance_delta_pct": calc_delta(baseline_summary["distance_total_km"], qpso_summary["distance_total_km"]),
-        "time_delta_pct": calc_delta(baseline_summary["time_total_min"], qpso_summary["time_total_min"]),
-        "congestion_delta_pct": calc_delta(baseline_summary["congestion_total"], qpso_summary["congestion_total"]),
+        "distance_improvement_pct": calc_improvement(
+            baseline_summary["distance_total_km"], qpso_summary["distance_total_km"]
+        ),
+        "time_improvement_pct": calc_improvement(
+            baseline_summary["time_total_min"], qpso_summary["time_total_min"]
+        ),
+        "congestion_improvement_pct": calc_improvement(
+            baseline_summary["congestion_total"], qpso_summary["congestion_total"]
+        ),
+        # Legacy fields for backward compatibility
+        "distance_delta_pct": round(
+            ((qpso_summary["distance_total_km"] - baseline_summary["distance_total_km"]) / max(0.1, baseline_summary["distance_total_km"])) * 100, 2
+        ),
+        "time_delta_pct": round(
+            ((qpso_summary["time_total_min"] - baseline_summary["time_total_min"]) / max(0.1, baseline_summary["time_total_min"])) * 100, 2
+        ),
+        "congestion_delta_pct": round(
+            ((qpso_summary["congestion_total"] - baseline_summary["congestion_total"]) / max(0.1, baseline_summary["congestion_total"])) * 100, 2
+        ),
     }
 
     benchmark_payload = {
@@ -170,7 +206,7 @@ def run_benchmark(
             "distance": {"min": bounds.distance.min_val, "max": bounds.distance.max_val},
             "congestion": {"min": bounds.congestion.min_val, "max": bounds.congestion.max_val},
         },
-        "baseline": {**baseline_summary, "runtime_sec": round(baseline_runtime, 4)},
+        "baseline": {**baseline_summary, "runtime_sec": round(baseline_runtime, 4), "method": baseline_method},
         "qpso": {
             **qpso_summary,
             "runtime_sec": round(qpso_runtime, 4),
@@ -178,10 +214,69 @@ def run_benchmark(
             "iterations": num_iterations,
         },
         "comparison": comparison_payload,
-        "convergence": [round(fit, 6) for fit in qpso_result.convergence],
+        "convergence": qpso_result.convergence,
+        "mean_convergence": qpso_result.mean_convergence,
+        "diversity_history": qpso_result.diversity_history,
         "routes": routes_payload,
     }
     with open(out / "benchmark.json", "w") as f:
         json.dump(benchmark_payload, f, indent=2)
 
     return benchmark_payload
+
+
+def run_batch_seeds(
+    network_fn,
+    fleet_fn,
+    seeds: List[int] = [42, 123, 456, 789, 1000],
+    num_particles: int = 20,
+    num_iterations: int = 40,
+    steps_per_vehicle: int = 12,
+    weights: Optional[dict] = None,
+) -> dict:
+    """
+    Runs repeated benchmark across multiple random seeds for scientific statistical rigor.
+    """
+    runs = []
+    for s in seeds:
+        net = network_fn()
+        tm = TrafficModel(seed=s)
+        tm.generate(net)
+        veh = fleet_fn(net, seed=s)
+        res = run_benchmark(
+            network=net,
+            traffic_model=tm,
+            vehicles=veh,
+            steps_per_vehicle=steps_per_vehicle,
+            num_particles=num_particles,
+            num_iterations=num_iterations,
+            weights=weights,
+            seed=s,
+        )
+        runs.append({
+            "seed": s,
+            "baseline_time": res["baseline"]["time_total_min"],
+            "qpso_time": res["qpso"]["time_total_min"],
+            "time_imp_pct": res["comparison"]["time_improvement_pct"],
+            "baseline_dist": res["baseline"]["distance_total_km"],
+            "qpso_dist": res["qpso"]["distance_total_km"],
+            "dist_imp_pct": res["comparison"]["distance_improvement_pct"],
+            "qpso_fitness": res["qpso"]["fitness"],
+            "runtime_sec": res["qpso"]["runtime_sec"],
+        })
+
+    avg_time_imp = statistics.mean(r["time_imp_pct"] for r in runs)
+    avg_dist_imp = statistics.mean(r["dist_imp_pct"] for r in runs)
+    avg_fitness = statistics.mean(r["qpso_fitness"] for r in runs)
+    avg_runtime = statistics.mean(r["runtime_sec"] for r in runs)
+
+    return {
+        "seeds_tested": seeds,
+        "runs": runs,
+        "summary": {
+            "avg_time_improvement_pct": round(avg_time_imp, 2),
+            "avg_distance_improvement_pct": round(avg_dist_imp, 2),
+            "avg_fitness": round(avg_fitness, 4),
+            "avg_runtime_sec": round(avg_runtime, 4),
+        },
+    }

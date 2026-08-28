@@ -1,25 +1,22 @@
 """
-solution.py — Ties the full pipeline together for one candidate solution:
+solution.py — Solution evaluation and aggregation pipeline for Route Planner (SIH26137).
 
-    particle (flat [0,1] vector)
-        -> decode_all_vehicles()      routes per vehicle
-        -> evaluate_route() each      distance/time/congestion per vehicle
-        -> check_route() each         constraint violations + penalty
-        -> aggregate                  D_total, T_total, C_total, penalty_total
-        -> compute_fitness()          single scalar QPSO minimizes
-
-This is the "give the problem to QPSO" boundary: everything above this
-module is routing-specific; qpso.py never imports any of it directly —
-main/experiment code wires them together via a closure.
+Wires:
+    particle continuous vector in [0, 1]^D
+        -> decode_all_vehicles()
+        -> traffic_model.update_vehicle_loads() (BPR vehicle coupling)
+        -> evaluate_route() per vehicle (Time, Distance, Congestion)
+        -> check_route() & check_fleet_capacity_violations()
+        -> compute_fitness() with normalized multi-objective blend and penalties
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from app.optimization.calibration import CalibrationBounds
 from app.optimization.decoder import decode_all_vehicles
 from app.optimization.fitness import SolutionTotals, compute_fitness
-from app.routing.constraints import ConstraintResult, check_route
+from app.routing.constraints import ConstraintResult, check_fleet_capacity_violations, check_route
 from app.routing.evaluator import RouteMetrics, evaluate_route
 from app.simulation.graph import RoadNetwork
 from app.simulation.traffic import TrafficModel
@@ -39,6 +36,7 @@ class FullSolution:
     vehicle_solutions: List[VehicleSolution]
     totals: SolutionTotals
     fitness: float
+    capacity_violations: List[str]
 
 
 def evaluate_solution(
@@ -48,11 +46,17 @@ def evaluate_solution(
     particle: List[float],
     steps_per_vehicle: int,
     bounds: CalibrationBounds,
-    weights: dict = None,
+    weights: Optional[dict] = None,
 ) -> FullSolution:
+    """
+    Decodes and evaluates a full candidate particle representing all fleet routes.
+    """
     routes = decode_all_vehicles(
         network, traffic_model, vehicles, particle, steps_per_vehicle
     )
+
+    # Multi-vehicle traffic load coupling
+    traffic_model.update_vehicle_loads(routes)
 
     vehicle_solutions = []
     d_total = t_total = c_total = penalty_total = 0.0
@@ -75,15 +79,24 @@ def evaluate_solution(
         c_total += metrics.congestion
         penalty_total += constraint.penalty
 
+    # Fleet capacity oversaturation penalty
+    cap_penalty, cap_violations = check_fleet_capacity_violations(network, traffic_model)
+    penalty_total += cap_penalty
+
     totals = SolutionTotals(
-        distance_total=d_total,
-        time_total=t_total,
-        congestion_total=c_total,
-        penalty_total=penalty_total,
+        distance_total=round(d_total, 2),
+        time_total=round(t_total, 2),
+        congestion_total=round(c_total, 2),
+        penalty_total=round(penalty_total, 2),
     )
+
     fitness = compute_fitness(
         totals, bounds.time, bounds.distance, bounds.congestion, weights=weights
     )
 
-    return FullSolution(vehicle_solutions=vehicle_solutions, totals=totals, fitness=fitness)
-
+    return FullSolution(
+        vehicle_solutions=vehicle_solutions,
+        totals=totals,
+        fitness=round(fitness, 5),
+        capacity_violations=cap_violations,
+    )

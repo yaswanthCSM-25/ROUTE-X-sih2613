@@ -1,15 +1,10 @@
 """
-evaluator.py — Route evaluation for Route Planner.
+evaluator.py — Route metrics evaluator for Route Planner (SIH26137).
 
-Turns a raw path (list of node names) into the metrics defined in the
-mathematical spec, for a single vehicle's route R_k = (v0, v1, ..., vn):
-
-    D_k = sum of d_ij over edges in R_k      (distance, km)
-    T_k = sum of t_ij (actual) over edges    (travel time, min)
-    C_k = sum of c_ij over edges             (congestion)
-
-Every number here is derived directly from the Road and TrafficModel
-objects built in app.simulation — nothing is invented.
+Calculates:
+    D(R) = sum of distance_km over edges in route R
+    T(R) = sum of BPR actual travel times over edges in route R
+    C(R) = sum of congestion indices over edges in route R
 """
 
 from dataclasses import dataclass, field
@@ -26,13 +21,13 @@ class RouteMetrics:
     time_min: float = 0.0
     congestion: float = 0.0
     edges_used: int = 0
-    broken_edges: List[str] = field(default_factory=list)  # edges in path that don't exist
+    broken_edges: List[str] = field(default_factory=list)
 
     def __repr__(self) -> str:
         return (
             f"RouteMetrics(path={'->'.join(self.path)}, "
-            f"distance={self.distance_km:.2f} km, "
-            f"time={self.time_min:.2f} min, "
+            f"distance={self.distance_km:.2f}km, "
+            f"time={self.time_min:.2f}min, "
             f"congestion={self.congestion:.2f})"
         )
 
@@ -41,12 +36,7 @@ def evaluate_route(
     network: RoadNetwork, traffic_model: TrafficModel, path: List[str]
 ) -> RouteMetrics:
     """
-    Walks the given path edge by edge and sums distance, actual travel
-    time, and congestion. If an edge in the path does not exist in the
-    network (e.g. the decoder or a corrupted particle produced an
-    invalid hop), it is recorded in `broken_edges` instead of raising —
-    the constraint handler is responsible for penalizing that, not the
-    evaluator.
+    Evaluates distance, BPR travel time, and congestion along a candidate path.
     """
     metrics = RouteMetrics(path=list(path))
 
@@ -60,7 +50,7 @@ def evaluate_route(
 
         road = network.get_road(source, target)
         actual_time = traffic_model.actual_travel_time_min(
-            source, target, road.free_flow_time_min
+            source, target, road.free_flow_time_min, road.capacity_vehicles
         )
         congestion = traffic_model.get_congestion(source, target)
 
@@ -68,5 +58,9 @@ def evaluate_route(
         metrics.time_min += actual_time
         metrics.congestion += congestion
         metrics.edges_used += 1
+
+    metrics.distance_km = round(metrics.distance_km, 2)
+    metrics.time_min = round(metrics.time_min, 2)
+    metrics.congestion = round(metrics.congestion, 2)
 
     return metrics

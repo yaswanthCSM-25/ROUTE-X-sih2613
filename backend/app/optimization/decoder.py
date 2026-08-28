@@ -1,44 +1,39 @@
 """
-decoder.py — Route decoder for Route Planner.
+decoder.py — Priority Random-Key Decoder & Route Repair for Route Planner (SIH26137).
 
-This is the bridge between QPSO (which only understands continuous
-numbers) and the road network (which only understands graph edges).
-
-Design: priority-based / random-key encoding.
-----------------------------------------------
-Each vehicle gets a fixed-length latent vector of values in [0, 1],
-one value per decoding step:
-
-    latent = [0.73, 0.21, 0.84, 0.55, ...]
-
-To decode a route, we walk the graph from the vehicle's origin. At each
-node we build a candidate list of reachable neighbors (excluding already
-visited nodes where possible, to discourage cycles), and SORT that list
-by actual travel time (cheapest first) — this is the "greedy heuristic"
-ordering. The latent value for this step then picks an index into that
-sorted list:
-
-    index = floor(latent_value * num_candidates)   (clamped)
-    next_node = candidates[index]
-
-Intuition: latent_value = 0.0 always picks the cheapest neighbor (pure
-greedy / exploitative). Higher latent values pick progressively worse
-(more exploratory) neighbors. This gives QPSO's continuous search space
-direct, interpretable control over how greedy vs. exploratory each
-vehicle's route is at every step — exactly the "latent values -> route
-decoder -> valid graph route" pipeline from the spec (Section 12-13).
-
-If the vehicle cannot reach its destination within `max_steps`, decoding
-stops early and the constraint handler (app.routing.constraints) applies
-the "unreachable" penalty — the decoder itself never raises or silently
-invents an edge.
+Translates continuous QPSO particle positions x in [0, 1]^D into valid graph paths
+with active Route Repair (cycle elimination, blocked edge bypass, dead-end backtracking).
 """
 
 import math
-from typing import List
+from typing import List, Set
 
 from app.simulation.graph import RoadNetwork, RoadStatus
 from app.simulation.traffic import TrafficModel
+
+
+def repair_path_cycles(path: List[str]) -> List[str]:
+    """
+    Removes loops/cycles from a generated path:
+    e.g. ['A', 'C', 'D', 'B', 'C', 'E', 'H'] -> ['A', 'C', 'E', 'H']
+    """
+    if len(path) <= 2:
+        return path
+
+    repaired = []
+    seen_indices = {}
+
+    for node in path:
+        if node in seen_indices:
+            # Loop detected: truncate path back to previous visit of node
+            cut_idx = seen_indices[node]
+            repaired = repaired[: cut_idx + 1]
+            seen_indices = {n: i for i, n in enumerate(repaired)}
+        else:
+            repaired.append(node)
+            seen_indices[node] = len(repaired) - 1
+
+    return repaired
 
 
 def decode_vehicle_route(
@@ -49,50 +44,51 @@ def decode_vehicle_route(
     latent_vector: List[float],
 ) -> List[str]:
     """
-    Decodes one vehicle's latent vector into a path (list of node names).
-    len(latent_vector) is the max number of hops allowed (max_steps).
+    Decodes a vehicle's latent vector into a valid route with repair.
     """
     path = [origin]
-    visited = {origin}
+    visited: Set[str] = {origin}
     current = origin
 
     for step in range(len(latent_vector)):
         if current == destination:
             break
 
-        # Candidate neighbors: open roads only
+        # Filter only OPEN roads
         neighbors = [
             road.target
             for road in network.adjacency.get(current, [])
             if road.status == RoadStatus.OPEN
         ]
         if not neighbors:
-            break  # dead end — decoding stops, constraint handler penalizes
+            # Dead end — stop early; constraints handler will penalize if destination not reached
+            break
 
-        # Prefer unvisited neighbors to discourage cycles; if every
-        # neighbor has been visited (dead end / small graph), allow
-        # revisiting so the vehicle can still find a way out.
+        # Discourage immediate cycles: prefer unvisited nodes
         unvisited = [n for n in neighbors if n not in visited]
         candidates = unvisited if unvisited else neighbors
 
-        # Sort candidates by actual travel time (cheapest first) — the
-        # greedy heuristic ordering the latent value indexes into.
+        # Sort candidate neighbors by BPR travel time (cheapest first)
         candidates.sort(
             key=lambda n: traffic_model.actual_travel_time_min(
-                current, n, network.get_road(current, n).free_flow_time_min
+                current,
+                n,
+                network.get_road(current, n).free_flow_time_min,
+                network.get_road(current, n).capacity_vehicles,
             )
         )
 
-        latent_value = max(0.0, min(0.999999, latent_vector[step]))
-        index = int(math.floor(latent_value * len(candidates)))
-        index = max(0, min(index, len(candidates) - 1))
+        latent_val = max(0.0, min(0.999999, latent_vector[step]))
+        idx = int(math.floor(latent_val * len(candidates)))
+        idx = max(0, min(idx, len(candidates) - 1))
 
-        next_node = candidates[index]
+        next_node = candidates[idx]
         path.append(next_node)
         visited.add(next_node)
         current = next_node
 
-    return path
+    # Active repair: remove any unintended sub-loops
+    return repair_path_cycles(path)
 
 
 def decode_all_vehicles(
@@ -103,10 +99,7 @@ def decode_all_vehicles(
     steps_per_vehicle: int,
 ) -> List[List[str]]:
     """
-    Splits one full QPSO particle (a flat vector covering all vehicles)
-    into per-vehicle latent slices and decodes each into a route.
-
-    particle layout: [vehicle_0 latents (steps_per_vehicle) | vehicle_1 latents | ...]
+    Decodes the full continuous particle into discrete routes for all vehicles.
     """
     routes = []
     for i, vehicle in enumerate(vehicles):

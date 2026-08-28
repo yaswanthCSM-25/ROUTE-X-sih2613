@@ -1,39 +1,65 @@
 """
-vehicles.py — Vehicle model for Route Planner.
+vehicles.py — Vehicle fleet model and generator for Route Planner (SIH26137).
 
-For the MVP, a vehicle k is simply:
+Represents vehicles in the transportation network:
+    v_k = (vehicle_id, origin, destination)
 
-    v_k = (s_k, d_k)
-
-where s_k is the starting node and d_k is the destination node.
-Extra fields (capacity, priority, time windows, etc.) can be added later
-once the base pipeline is proven correct.
+Supports deterministic multi-vehicle fleet generation from 5 up to 50+ vehicles.
 """
 
-from dataclasses import dataclass
-from typing import List
+import random
+from dataclasses import dataclass, field
+from typing import List, Optional
+from app.simulation.graph import RoadNetwork
 
 
 @dataclass
 class Vehicle:
+    """A vehicle navigating from origin to destination."""
+
     vehicle_id: str
     origin: str
     destination: str
+    current_position: Optional[str] = None
+    status: str = "IN_TRANSIT"  # IN_TRANSIT, ARRIVED, DELAYED
+    route: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self.current_position is None:
+            self.current_position = self.origin
 
     def __repr__(self) -> str:
         return f"Vehicle({self.vehicle_id}: {self.origin} -> {self.destination})"
 
 
 def build_demo_vehicles() -> List[Vehicle]:
-    """
-    5 simulated vehicles for the first Route Planner experiment.
-    Origins/destinations are chosen to be reachable on the demo network
-    defined in graph.py.
-    """
+    """Default 5 simulated vehicles for 9-node demo."""
     return [
-        Vehicle("V1", "A", "H"),
-        Vehicle("V2", "A", "J"),
-        Vehicle("V3", "B", "H"),
-        Vehicle("V4", "C", "J"),
-        Vehicle("V5", "A", "G"),
+        Vehicle("V01", "A", "H"),
+        Vehicle("V02", "A", "J"),
+        Vehicle("V03", "B", "H"),
+        Vehicle("V04", "C", "J"),
+        Vehicle("V05", "A", "G"),
     ]
+
+
+def build_fleet(count: int, network: RoadNetwork, seed: int = 42) -> List[Vehicle]:
+    """
+    Generates a deterministic fleet of `count` vehicles across the provided network graph.
+    Picks distinct origin-destination pairs.
+    """
+    if len(network.nodes) < 2:
+        return []
+
+    rng = random.Random(seed)
+    nodes = list(network.nodes)
+    vehicles = []
+
+    for i in range(count):
+        vid = f"V{i + 1:02d}"
+        origin = rng.choice(nodes)
+        dest_candidates = [n for n in nodes if n != origin]
+        destination = rng.choice(dest_candidates)
+        vehicles.append(Vehicle(vehicle_id=vid, origin=origin, destination=destination))
+
+    return vehicles

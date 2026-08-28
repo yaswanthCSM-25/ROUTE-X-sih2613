@@ -16,15 +16,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.analysis.benchmark import run_benchmark
+from app.analysis.benchmark import run_batch_seeds, run_benchmark
 from app.simulation.graph import (
     RoadNetwork,
     RoadStatus,
     build_demo_network,
     build_grid_network,
+    build_metropolitan_network,
+    build_network_by_preset,
 )
-from app.simulation.traffic import TrafficModel
-from app.simulation.vehicles import Vehicle, build_demo_vehicles
+from app.simulation.traffic import (
+    DEFAULT_BPR_ALPHA,
+    DEFAULT_BPR_BETA,
+    Incident,
+    IncidentType,
+    TrafficModel,
+)
+from app.simulation.vehicles import Vehicle, build_demo_vehicles, build_fleet
 
 app = FastAPI(
     title="Route Planner API — SIH26137",
@@ -41,6 +49,10 @@ app.add_middleware(
 )
 
 
+# =========================================================================
+# Pydantic Schemas
+# =========================================================================
+
 class VehicleItem(BaseModel):
     vehicle_id: str
     origin: str
@@ -53,8 +65,25 @@ class WeightsModel(BaseModel):
     gamma: float = Field(0.30, description="Weight for congestion index (C_norm)")
 
 
+class IncidentRequest(BaseModel):
+    preset: str = Field("demo")
+    source: str
+    target: str
+    incident_type: IncidentType = IncidentType.ROAD_CLOSURE
+    severity: float = Field(1.0, ge=0.0, le=1.0)
+    description: str = "Incident injected on road"
+
+
+class BatchBenchmarkRequest(BaseModel):
+    preset: str = Field("demo")
+    fleet_size: int = Field(5, ge=2, le=50)
+    seeds: List[int] = Field(default_factory=lambda: [42, 123, 456, 789, 1000])
+    num_particles: int = Field(20, ge=5, le=50)
+    num_iterations: int = Field(30, ge=10, le=100)
+
+
 class OptimizeRequest(BaseModel):
-    preset: str = Field("demo", description="demo, rush_hour, bridge_closure, or smart_grid")
+    preset: str = Field("demo", description="demo, rush_hour, bridge_closure, smart_grid, or metropolitan")
     num_particles: int = Field(20, ge=5, le=100)
     num_iterations: int = Field(50, ge=10, le=200)
     traffic_seed: int = Field(42, ge=1)
@@ -63,30 +92,37 @@ class OptimizeRequest(BaseModel):
         default=None, description="Mapping like {'D-F': 'CLOSED', 'C-E': 'CLOSED'}"
     )
     custom_vehicles: Optional[List[VehicleItem]] = None
-    steps_per_vehicle: int = Field(12, ge=6, le=30)
+    fleet_size: Optional[int] = None
+    steps_per_vehicle: Optional[int] = None
+    baseline_method: str = Field("dijkstra", description="dijkstra or astar")
+    bpr_alpha: float = Field(DEFAULT_BPR_ALPHA, ge=0.0, le=2.0)
+    bpr_beta: float = Field(DEFAULT_BPR_BETA, ge=1.0, le=6.0)
 
+
+# =========================================================================
+# Helper Functions
+# =========================================================================
 
 def get_network_for_preset(preset: str) -> RoadNetwork:
+    return build_network_by_preset(preset)
+
+
+def get_vehicles_for_preset(preset: str, network: RoadNetwork, custom_count: Optional[int] = None) -> List[Vehicle]:
+    if custom_count and custom_count > 0:
+        return build_fleet(custom_count, network, seed=42)
+
     if preset in ("demo", "rush_hour", "bridge_closure"):
-        return build_demo_network()
+        return build_demo_vehicles()
     elif preset == "smart_grid":
-        return build_grid_network()
-    else:
-        return build_demo_network()
-
-
-def get_vehicles_for_preset(preset: str, network: RoadNetwork) -> List[Vehicle]:
-    if preset == "smart_grid":
-        return [
-            Vehicle("V01", "N01", "N16"),
-            Vehicle("V02", "N04", "N13"),
-            Vehicle("V03", "N02", "N15"),
-            Vehicle("V04", "N05", "N12"),
-            Vehicle("V05", "N03", "N14"),
-            Vehicle("V06", "N01", "N11"),
-        ]
+        return build_fleet(10, network, seed=42)
+    elif preset == "metropolitan":
+        return build_fleet(20, network, seed=42)
     return build_demo_vehicles()
 
+
+# =========================================================================
+# REST Endpoints
+# =========================================================================
 
 @app.get("/api/health")
 def health_check():
@@ -104,19 +140,19 @@ def get_project_info():
         "theme": "Transportation and Logistics",
         "objectives": [
             "1. Design a quantum-inspired metaheuristic framework capable of solving large-scale VRP and shortest-path problems.",
-            "2. Minimize total travel time, distance, and traffic congestion.",
+            "2. Minimize total travel time, distance, and traffic congestion via multi-objective BPR optimization.",
             "3. Reduce computational complexity while improving convergence speed and solution quality compared with classical algorithms.",
-            "4. Demonstrate scalability for smart-city logistics and intelligent transportation systems.",
+            "4. Demonstrate scalability for smart-city logistics and dynamic incident resilience.",
         ],
         "deliverables": [
-            {"id": "DEL-01", "component": "Graph-Based Network Model", "status": "Delivered", "description": "Weighted directed/bidirectional network model with spatial coordinates."},
-            {"id": "DEL-02", "component": "Traffic & Congestion Engine", "status": "Delivered", "description": "Stochastic road-specific congestion simulation and travel time adjustments."},
-            {"id": "DEL-03", "component": "Classical Dijkstra Baseline", "status": "Delivered", "description": "Reference shortest-path benchmark computing travel time, distance, and congestion."},
-            {"id": "DEL-04", "component": "QPSO Metaheuristic Engine", "status": "Delivered", "description": "Quantum delta-potential-well position updates, mbest attractor, and multi-objective normalization."},
-            {"id": "DEL-05", "component": "FastAPI REST API", "status": "Delivered", "description": "High-performance asynchronous backend services."},
-            {"id": "DEL-06", "component": "Interactive Web Visualizer", "status": "Delivered", "description": "Modern dark UI, traffic heatmaps, road toggle controls, and vehicle route animations."},
-            {"id": "DEL-07", "component": "Convergence Analytics", "status": "Delivered", "description": "Real-time comparative KPIs, delta badges, and SVG convergence charts."},
-            {"id": "DEL-08", "component": "Smart-City Scaling Presets", "status": "Delivered", "description": "Pre-configured scenarios from 9-node demo to 16-node smart-city grid."},
+            {"id": "DEL-01", "component": "Graph-Based Network Model", "status": "Delivered", "description": "Weighted directed graph G=(V,E) with spatial layout and road attributes."},
+            {"id": "DEL-02", "component": "BPR Congestion Simulation", "status": "Delivered", "description": "Bureau of Public Roads formulation coupled with vehicle density: t = t_free * (1 + alpha * (V/C)^beta)."},
+            {"id": "DEL-03", "component": "Classical Baseline (Dijkstra/A*)", "status": "Delivered", "description": "Shortest-path reference benchmark over travel time."},
+            {"id": "DEL-04", "component": "QPSO Optimization Engine", "status": "Delivered", "description": "Quantum delta-potential-well position update, mbest attractor, and random-key path repair."},
+            {"id": "DEL-05", "component": "FastAPI REST API", "status": "Delivered", "description": "Asynchronous REST endpoints for optimization, incidents, and multi-seed analysis."},
+            {"id": "DEL-06", "component": "Interactive Simulation Dashboard", "status": "Delivered", "description": "React + SVG visualizer with traffic heatmaps, road closures, and fleet animation."},
+            {"id": "DEL-07", "component": "Convergence Analytics", "status": "Delivered", "description": "Real-time comparative KPIs, delta badges, and SVG convergence decay charts."},
+            {"id": "DEL-08", "component": "Dynamic Incidents & Scalability", "status": "Delivered", "description": "Real-time accident/closure injection with dynamic rerouting across 9 to 30 nodes."},
         ],
     }
 
@@ -127,7 +163,7 @@ def get_scenarios():
         "scenarios": [
             {
                 "id": "demo",
-                "name": "Standard 9-Node Network",
+                "name": "Standard 9-Node Demo",
                 "description": "Baseline 9-node, 14-road scenario with 5 simulated vehicles.",
                 "nodes_count": 9,
                 "roads_count": 14,
@@ -152,10 +188,18 @@ def get_scenarios():
             {
                 "id": "smart_grid",
                 "name": "16-Node Smart-City Grid",
-                "description": "Scalable 4x4 urban grid testing multi-vehicle logistics (6 vehicles).",
+                "description": "Scalable 4x4 urban grid testing multi-vehicle logistics (10 vehicles).",
                 "nodes_count": 16,
                 "roads_count": 30,
-                "vehicles_count": 6,
+                "vehicles_count": 10,
+            },
+            {
+                "id": "metropolitan",
+                "name": "30-Node Metropolitan Network",
+                "description": "Large-scale urban network testing 20+ vehicle logistics & ring corridors.",
+                "nodes_count": 30,
+                "roads_count": 52,
+                "vehicles_count": 20,
             },
         ]
     }
@@ -198,7 +242,7 @@ def get_traffic(preset: str = Query("demo"), seed: int = Query(42)):
     traffic_data = []
     for r in network.roads:
         c_ij = traffic_model.get_congestion(r.source, r.target)
-        t_act = traffic_model.actual_travel_time_min(r.source, r.target, r.free_flow_time_min)
+        t_act = traffic_model.actual_travel_time_min(r.source, r.target, r.free_flow_time_min, r.capacity_vehicles)
         traffic_data.append({
             "source": r.source,
             "target": r.target,
@@ -211,9 +255,9 @@ def get_traffic(preset: str = Query("demo"), seed: int = Query(42)):
 
 
 @app.get("/api/vehicles")
-def get_vehicles(preset: str = Query("demo")):
+def get_vehicles(preset: str = Query("demo"), count: Optional[int] = Query(None)):
     network = get_network_for_preset(preset)
-    vehicles = get_vehicles_for_preset(preset, network)
+    vehicles = get_vehicles_for_preset(preset, network, custom_count=count)
     return {
         "preset": preset,
         "vehicles": [
@@ -227,56 +271,64 @@ def get_vehicles(preset: str = Query("demo")):
 def optimize_routes(req: OptimizeRequest):
     network = get_network_for_preset(req.preset)
 
-    # Apply preset-specific conditions
+    # Preset specific conditions
     seed = req.traffic_seed
     if req.preset == "rush_hour":
         seed = 99
     elif req.preset == "bridge_closure":
-        # Force road E->H and H->E closed
         for road in network.roads:
             if (road.source == "E" and road.target == "H") or (road.source == "H" and road.target == "E"):
                 road.status = RoadStatus.CLOSED
 
-    # Apply user-supplied road status overrides
+    # User road overrides
     if req.road_status_overrides:
         for key, status_str in req.road_status_overrides.items():
             parts = key.replace("->", "-").split("-")
             if len(parts) == 2:
                 u, v = parts[0].strip(), parts[1].strip()
                 status_enum = RoadStatus.CLOSED if status_str.upper() == "CLOSED" else RoadStatus.OPEN
-                for r in network.roads:
-                    if (r.source == u and r.target == v) or (r.source == v and r.target == u):
-                        r.status = status_enum
+                network.set_road_status(u, v, status_enum)
 
-    # Generate traffic
-    traffic_model = TrafficModel(seed=seed)
+    # Initialize Traffic with BPR
+    traffic_model = TrafficModel(seed=seed, alpha_bpr=req.bpr_alpha, beta_bpr=req.bpr_beta)
     traffic_model.generate(network)
 
-    # Vehicles
+    # Vehicles fleet
     if req.custom_vehicles and len(req.custom_vehicles) > 0:
         vehicles = [Vehicle(v.vehicle_id, v.origin, v.destination) for v in req.custom_vehicles]
     else:
-        vehicles = get_vehicles_for_preset(req.preset, network)
+        vehicles = get_vehicles_for_preset(req.preset, network, custom_count=req.fleet_size)
 
-    # Normalization of weights
+    # Determine steps per vehicle
+    steps = req.steps_per_vehicle
+    if not steps:
+        if req.preset == "metropolitan":
+            steps = 22
+        elif req.preset == "smart_grid":
+            steps = 16
+        else:
+            steps = 12
+
+    # Weights
     w_dict = {"alpha": req.weights.alpha, "beta": req.weights.beta, "gamma": req.weights.gamma}
     w_sum = sum(w_dict.values())
     if w_sum > 0:
         w_dict = {k: v / w_sum for k, v in w_dict.items()}
 
-    # Run Benchmark & QPSO
+    # Run Benchmark
     result = run_benchmark(
         network=network,
         traffic_model=traffic_model,
         vehicles=vehicles,
-        steps_per_vehicle=req.steps_per_vehicle,
+        steps_per_vehicle=steps,
         num_particles=req.num_particles,
         num_iterations=req.num_iterations,
         weights=w_dict,
         seed=seed,
+        baseline_method=req.baseline_method,
     )
 
-    # Enrich payload with network nodes & road metadata for immediate rendering
+    # Enrich payload with network nodes & road metadata
     result["network"] = {
         "nodes": [
             {
@@ -295,8 +347,11 @@ def optimize_routes(req: OptimizeRequest):
                 "free_time_min": round(r.free_flow_time_min, 2),
                 "capacity": r.capacity_vehicles,
                 "status": r.status.value,
+                "load": traffic_model.vehicle_counts.get((r.source, r.target), 0),
                 "congestion": round(traffic_model.get_congestion(r.source, r.target), 3),
-                "actual_time_min": round(traffic_model.actual_travel_time_min(r.source, r.target, r.free_flow_time_min), 2),
+                "actual_time_min": round(
+                    traffic_model.actual_travel_time_min(r.source, r.target, r.free_flow_time_min, r.capacity_vehicles), 2
+                ),
             }
             for r in network.roads
         ],
@@ -310,7 +365,87 @@ def optimize_routes(req: OptimizeRequest):
     return result
 
 
-# Static Production Frontend Mounting (Serves built React SPA from /)
+@app.post("/api/simulation/incident")
+def trigger_incident(req: IncidentRequest):
+    """
+    Injects a dynamic incident on a road segment and runs optimization to compute adaptive rerouting.
+    """
+    network = get_network_for_preset(req.preset)
+    traffic_model = TrafficModel(seed=42)
+    traffic_model.generate(network)
+    vehicles = get_vehicles_for_preset(req.preset, network)
+
+    # 1. Pre-incident run
+    pre_result = run_benchmark(
+        network=network,
+        traffic_model=traffic_model,
+        vehicles=vehicles,
+        steps_per_vehicle=12,
+        num_particles=20,
+        num_iterations=30,
+        seed=42,
+    )
+
+    # 2. Inject incident
+    incident = Incident(
+        source=req.source,
+        target=req.target,
+        incident_type=req.incident_type,
+        severity=req.severity,
+        description=req.description,
+    )
+    traffic_model.inject_incident(network, incident)
+
+    # 3. Post-incident re-optimization
+    post_result = run_benchmark(
+        network=network,
+        traffic_model=traffic_model,
+        vehicles=vehicles,
+        steps_per_vehicle=12,
+        num_particles=25,
+        num_iterations=40,
+        seed=42,
+    )
+
+    return {
+        "incident": {
+            "source": req.source,
+            "target": req.target,
+            "type": req.incident_type.value,
+            "description": req.description,
+        },
+        "pre_incident": pre_result,
+        "post_incident": post_result,
+    }
+
+
+@app.post("/api/benchmark/batch")
+def run_batch_benchmark(req: BatchBenchmarkRequest):
+    """
+    Executes a multi-seed statistical analysis across seeds to prove algorithmic repeatability.
+    """
+    def net_factory():
+        return get_network_for_preset(req.preset)
+
+    def fleet_factory(net, seed):
+        return build_fleet(req.fleet_size, net, seed=seed)
+
+    steps = 16 if req.preset == "smart_grid" else (22 if req.preset == "metropolitan" else 12)
+
+    batch_res = run_batch_seeds(
+        network_fn=net_factory,
+        fleet_fn=fleet_factory,
+        seeds=req.seeds,
+        num_particles=req.num_particles,
+        num_iterations=req.num_iterations,
+        steps_per_vehicle=steps,
+    )
+    return batch_res
+
+
+# =========================================================================
+# Static Production Frontend Mounting
+# =========================================================================
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if frontend_dist.exists() and (frontend_dist / "index.html").exists():
     if (frontend_dist / "assets").exists():
