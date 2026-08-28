@@ -1,0 +1,325 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Crisp Glassmorphism tailored for Minimal Light Background */
+  --bg-card: rgba(255, 255, 255, 0.65); /* White frosted glass */
+  --bg-input: rgba(0, 0, 0, 0.85); /* Black inputs */
+  --bg-input-hover: rgba(0, 0, 0, 1);
+  
+  --text-primary: #111827; /* Dark text for readability */
+  --text-secondary: #4b5563;
+  --text-muted: #9ca3af;
+  
+  /* Sleek modern accents */
+  --accent-primary: #0f172a; /* Slate / Almost Black */
+  --accent-primary-hover: #1e293b;
+  --accent-secondary: #3b82f6; /* Clean crisp blue */
+  --accent-danger: #ef4444;
+  
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-light: rgba(0, 0, 0, 0.05);
+  --border-highlight: rgba(0, 0, 0, 0.15);
+  
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.25);
+  
+  --transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background-image: url('/bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  background-color: #f8fafc; /* Light fallback */
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  padding-bottom: 0.5rem;
+}
+
+p {
+  color: var(--text-secondary);
+}
+
+/* Layout Utilities */
+.app-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+/* Space efficient masonry layout to remove vertical gaps and form a clean square */
+.grid-layout.masonry-layout {
+  display: flex;
+  flex-direction: row;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  align-items: stretch; /* Forces all columns to the same height */
+}
+
+.masonry-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Make the bottom wrappers in each column stretch */
+.masonry-col > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.masonry-col > div:last-child {
+  flex: 1; /* Stretches the bottom module to fill the column height */
+}
+
+.col-small {
+  flex: 1;
+}
+
+.col-wide {
+  flex: 1.4; /* Slightly thinner than 1.5 to shrink the Optimization side */
+}
+
+@media (max-width: 900px) {
+  .grid-layout.masonry-layout {
+    flex-direction: column;
+  }
+}
+
+/* Crisp Glassmorphism Components */
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(16px); /* Crisp blur */
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-highlight);
+  border-right-color: var(--border-light);
+  border-bottom-color: var(--border-light);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-glass);
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  overflow: hidden;
+  cursor: default; /* Base cursor */
+  flex: 1; /* Stretch to fill column */
+}
+
+/* Cursor interactive effects - Crisp and punchy */
+.card:hover {
+  transform: translateY(-4px) scale(1.01);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.8); /* more opaque on hover */
+  z-index: 10;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+/* Crisp Form Controls */
+input, select {
+  width: 100%;
+  background: var(--bg-input);
+  color: #ffffff; /* Explicitly white text for inputs */
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: var(--transition);
+  appearance: none;
+  backdrop-filter: blur(10px);
+  cursor: text;
+}
+
+select {
+  cursor: pointer;
+}
+
+input:hover, select:hover {
+  background: var(--bg-input-hover);
+  border-color: rgba(0, 0, 0, 0.5);
+}
+
+input:focus, select:focus {
+  outline: none;
+  background: #000000;
+  border-color: var(--accent-secondary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
+input:disabled {
+  background: rgba(0, 0, 0, 0.7); /* Dark background for disabled inputs too */
+  color: #9ca3af; /* Muted light gray text so it's readable on dark background */
+  border-color: rgba(0, 0, 0, 0.3);
+  cursor: not-allowed;
+}
+
+/* Dropdown option colors */
+select option {
+  background: #000000;
+  color: #ffffff;
+}
+
+/* Select wrapper for custom arrow */
+.select-wrapper {
+  position: relative;
+}
+
+.select-wrapper::after {
+  content: "▼";
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: .3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-radius: 34px;
+  border: 1px solid var(--border-color);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-secondary);
+  transition: .3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary-hover);
+}
+
+input:checked + .slider:before {
+  transform: translateX(24px);
+  background-color: white;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+
+/* Error messages */
+.error-text {
+  color: var(--accent-danger);
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-top: 0.25rem;
+}
+input.error {
+  border-color: var(--accent-danger);
+  background: rgba(255, 77, 79, 0.1);
+}
+input.error:focus {
+  box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.3);
+}
+
+/* Buttons */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 1.15rem 2.5rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: var(--shadow-glow);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  backdrop-filter: blur(10px);
+  min-width: 280px;
+}
+
+.btn-primary:hover {
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 0 35px rgba(217, 70, 239, 0.6);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
+}
