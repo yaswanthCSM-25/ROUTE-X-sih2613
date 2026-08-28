@@ -27,6 +27,15 @@ export default function IncidentSimulator({
     return opts;
   }, [roads]);
 
+  React.useEffect(() => {
+    if (roadOptions.length > 0) {
+      const exists = roadOptions.some((opt) => opt.key === selectedRoad);
+      if (!exists) {
+        setSelectedRoad(roadOptions[0].key);
+      }
+    }
+  }, [roadOptions, selectedRoad]);
+
   const handleTrigger = () => {
     const [u, v] = selectedRoad.split('-');
     onInjectIncident({
