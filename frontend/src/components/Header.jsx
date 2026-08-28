@@ -54,9 +54,12 @@ export default function Header({
               <span className="badge badge-cyan">
                 Egreen Quanta
               </span>
+              <span className="badge badge-purple" style={{ fontSize: '0.7rem' }}>
+                Simulated / Experimental
+              </span>
             </div>
             <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>
-              Quantum-Inspired Particle Swarm Optimization (QPSO) vs. Classical Baseline
+              Quantum-Inspired Intelligent Traffic Route Optimization (QPSO vs. Classical Baseline)
             </p>
           </div>
         </div>

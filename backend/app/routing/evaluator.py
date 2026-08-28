@@ -52,7 +52,7 @@ def evaluate_route(
         actual_time = traffic_model.actual_travel_time_min(
             source, target, road.free_flow_time_min, road.capacity_vehicles
         )
-        congestion = traffic_model.get_congestion(source, target)
+        congestion = traffic_model.get_congestion(source, target, road.capacity_vehicles)
 
         metrics.distance_km += road.distance_km
         metrics.time_min += actual_time

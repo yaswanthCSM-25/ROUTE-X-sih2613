@@ -39,36 +39,36 @@ class FullSolution:
     capacity_violations: List[str]
 
 
-def evaluate_solution(
+def evaluate_routes_as_solution(
     network: RoadNetwork,
     traffic_model: TrafficModel,
     vehicles: List[Vehicle],
-    particle: List[float],
-    steps_per_vehicle: int,
+    routes: List[List[str]],
     bounds: CalibrationBounds,
     weights: Optional[dict] = None,
 ) -> FullSolution:
     """
-    Decodes and evaluates a full candidate particle representing all fleet routes.
+    Evaluates an explicit list of candidate routes for the fleet (e.g. from baseline or QPSO)
+    using identical traffic load coupling, constraint validation, and multi-objective scoring.
     """
-    routes = decode_all_vehicles(
-        network, traffic_model, vehicles, particle, steps_per_vehicle
-    )
-
-    # Multi-vehicle traffic load coupling
+    # Dynamic multi-vehicle traffic load coupling
     traffic_model.update_vehicle_loads(routes)
 
     vehicle_solutions = []
     d_total = t_total = c_total = penalty_total = 0.0
 
     for vehicle, path in zip(vehicles, routes):
-        metrics = evaluate_route(network, traffic_model, path)
-        constraint = check_route(network, metrics, vehicle.origin, vehicle.destination)
+        if not path:
+            metrics = RouteMetrics(path=[])
+            constraint = ConstraintResult(valid=False, violations=["unreachable"], penalty=200.0)
+        else:
+            metrics = evaluate_route(network, traffic_model, path)
+            constraint = check_route(network, metrics, vehicle.origin, vehicle.destination)
 
         vehicle_solutions.append(
             VehicleSolution(
                 vehicle_id=vehicle.vehicle_id,
-                path=path,
+                path=path or [],
                 metrics=metrics,
                 constraint=constraint,
             )
@@ -99,4 +99,24 @@ def evaluate_solution(
         totals=totals,
         fitness=round(fitness, 5),
         capacity_violations=cap_violations,
+    )
+
+
+def evaluate_solution(
+    network: RoadNetwork,
+    traffic_model: TrafficModel,
+    vehicles: List[Vehicle],
+    particle: List[float],
+    steps_per_vehicle: int,
+    bounds: CalibrationBounds,
+    weights: Optional[dict] = None,
+) -> FullSolution:
+    """
+    Decodes and evaluates a full candidate particle representing all fleet routes.
+    """
+    routes = decode_all_vehicles(
+        network, traffic_model, vehicles, particle, steps_per_vehicle
+    )
+    return evaluate_routes_as_solution(
+        network, traffic_model, vehicles, routes, bounds, weights=weights
     )

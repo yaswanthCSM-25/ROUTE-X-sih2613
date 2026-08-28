@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app.analysis.benchmark import run_batch_seeds, run_benchmark
+from app.analysis.benchmark import run_batch_seeds, run_benchmark, run_scalability_experiment
 from app.simulation.graph import (
     RoadNetwork,
     RoadStatus,
@@ -139,20 +139,20 @@ def get_project_info():
         "category": "Software",
         "theme": "Transportation and Logistics",
         "objectives": [
-            "1. Design a quantum-inspired metaheuristic framework capable of solving large-scale VRP and shortest-path problems.",
-            "2. Minimize total travel time, distance, and traffic congestion via multi-objective BPR optimization.",
-            "3. Reduce computational complexity while improving convergence speed and solution quality compared with classical algorithms.",
-            "4. Demonstrate scalability for smart-city logistics and dynamic incident resilience.",
+            "1. Design a quantum-inspired metaheuristic framework (QPSO) for multi-vehicle traffic-aware route optimization.",
+            "2. Jointly minimize total travel time, distance, and congestion via multi-objective BPR optimization.",
+            "3. Provide fair, quantifiable comparison against classical Dijkstra/A* baselines with statistical rigor.",
+            "4. Demonstrate scalability across urban simulation prototypes (from 5 to 50 vehicles) and dynamic incident resilience.",
         ],
         "deliverables": [
-            {"id": "DEL-01", "component": "Graph-Based Network Model", "status": "Delivered", "description": "Weighted directed graph G=(V,E) with spatial layout and road attributes."},
-            {"id": "DEL-02", "component": "BPR Congestion Simulation", "status": "Delivered", "description": "Bureau of Public Roads formulation coupled with vehicle density: t = t_free * (1 + alpha * (V/C)^beta)."},
-            {"id": "DEL-03", "component": "Classical Baseline (Dijkstra/A*)", "status": "Delivered", "description": "Shortest-path reference benchmark over travel time."},
-            {"id": "DEL-04", "component": "QPSO Optimization Engine", "status": "Delivered", "description": "Quantum delta-potential-well position update, mbest attractor, and random-key path repair."},
-            {"id": "DEL-05", "component": "FastAPI REST API", "status": "Delivered", "description": "Asynchronous REST endpoints for optimization, incidents, and multi-seed analysis."},
-            {"id": "DEL-06", "component": "Interactive Simulation Dashboard", "status": "Delivered", "description": "React + SVG visualizer with traffic heatmaps, road closures, and fleet animation."},
-            {"id": "DEL-07", "component": "Convergence Analytics", "status": "Delivered", "description": "Real-time comparative KPIs, delta badges, and SVG convergence decay charts."},
-            {"id": "DEL-08", "component": "Dynamic Incidents & Scalability", "status": "Delivered", "description": "Real-time accident/closure injection with dynamic rerouting across 9 to 30 nodes."},
+            {"id": "DEL-01", "component": "Graph-Based Network Model", "status": "Delivered", "description": "Weighted directed graph G=(V,E) with spatial layout and road attributes (d, s, cap, status, t0)."},
+            {"id": "DEL-02", "component": "BPR Congestion Simulation", "status": "Delivered", "description": "Bureau of Public Roads formulation coupled with dynamic vehicle load: t = t0 * (1 + alpha * (V/C)^beta)."},
+            {"id": "DEL-03", "component": "Classical Baseline (Dijkstra/A*)", "status": "Delivered", "description": "Shortest-path reference benchmark evaluated with identical multi-objective fitness scoring."},
+            {"id": "DEL-04", "component": "QPSO Optimization Engine", "status": "Delivered", "description": "Quantum delta-potential-well position update, mbest attractor, target-guided decoding, and guaranteed reachability."},
+            {"id": "DEL-05", "component": "FastAPI REST API", "status": "Delivered", "description": "High-performance asynchronous REST endpoints for optimization, dynamic incidents, batch testing, and scalability."},
+            {"id": "DEL-06", "component": "Interactive Simulation Dashboard", "status": "Delivered", "description": "React + SVG visualizer with traffic heatmaps, road closures, and fleet animation (Simulated / Experimental)."},
+            {"id": "DEL-07", "component": "Convergence Analytics", "status": "Delivered", "description": "Real-time comparative KPIs, delta badges, and SVG convergence decay charts tracking global-best monotonicity."},
+            {"id": "DEL-08", "component": "Dynamic Incidents & Scalability", "status": "Delivered", "description": "Real-time accident/closure injection with dynamic rerouting across 9 to 30 nodes (Stages 1 to 4)."},
         ],
     }
 
@@ -441,6 +441,14 @@ def run_batch_benchmark(req: BatchBenchmarkRequest):
         steps_per_vehicle=steps,
     )
     return batch_res
+
+
+@app.get("/api/benchmark/scalability")
+def get_scalability_benchmark(seed: int = Query(42)):
+    """
+    Executes standard 4-stage scalability experiment across simulation prototypes.
+    """
+    return run_scalability_experiment(seed=seed)
 
 
 # =========================================================================

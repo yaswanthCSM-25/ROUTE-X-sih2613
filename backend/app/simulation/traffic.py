@@ -87,16 +87,19 @@ class TrafficModel:
                 self.vehicle_counts[key] = self.vehicle_counts.get(key, 0) + 1
         return self.vehicle_counts
 
-    def get_congestion(self, source: str, target: str) -> float:
+    def get_congestion(self, source: str, target: str, capacity: int = 6) -> float:
         """
-        Combined congestion index in [0, 1+] accounting for static background traffic
-        and dynamic vehicle loads.
+        Combined congestion index in [0, 1] accounting for static background traffic
+        and dynamic vehicle load relative to road capacity:
+            c = min(1.0, base_c * 0.5 + (load / max(1, capacity)) * 0.5)
         """
         key = (source, target)
         base = self.static_congestion.get(key, 0.2)
         load = self.vehicle_counts.get(key, 0)
-        # Dynamic component added to background
-        return round(min(1.0, base + (load * 0.08)), 3)
+        effective_capacity = max(1, capacity)
+        dynamic_ratio = load / effective_capacity
+        combined = (base * 0.5) + (dynamic_ratio * 0.5)
+        return round(min(1.0, max(0.0, combined)), 3)
 
     def actual_travel_time_min(
         self,
@@ -106,22 +109,26 @@ class TrafficModel:
         capacity: int = 6,
     ) -> float:
         """
-        BPR travel time equation:
-            t = t_free * (1 + alpha * (V/C)^beta) * (1 + c_static * 0.5)
+        Bureau of Public Roads (BPR) travel time formulation:
+            t = t_free * (1 + alpha * (V / C) ^ beta)
+        where total volume V = dynamic_load + background_load.
         """
+        if free_flow_time_min <= 0:
+            return 0.1
+
         key = (source, target)
         base_c = self.static_congestion.get(key, 0.1)
         load = self.vehicle_counts.get(key, 0)
         effective_capacity = max(1, capacity)
 
         # Volume / Capacity ratio (V/C)
-        # Background traffic adds virtual load: base_c * capacity
+        # Background traffic adds virtual load: base_c * effective_capacity * 0.5
         total_volume = load + (base_c * effective_capacity * 0.5)
-        vc_ratio = total_volume / effective_capacity
+        vc_ratio = max(0.0, total_volume / effective_capacity)
 
         # BPR formula
         bpr_factor = 1.0 + self.alpha_bpr * (vc_ratio ** self.beta_bpr)
-        actual_time = free_flow_time_min * bpr_factor
+        actual_time = max(free_flow_time_min, free_flow_time_min * bpr_factor)
 
         return round(actual_time, 2)
 

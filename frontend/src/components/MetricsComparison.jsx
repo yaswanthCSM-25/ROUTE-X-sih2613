@@ -12,12 +12,24 @@ export default function MetricsComparison({ benchmark }) {
 
   const { baseline, qpso, comparison } = benchmark;
 
-  const renderDelta = (deltaPct, invertGood = false) => {
-    if (deltaPct === undefined || deltaPct === null) return null;
-    const isNegative = deltaPct < 0;
-    const isGood = invertGood ? !isNegative : isNegative; // for distance/time/congestion, negative is better!
-    const ColorClass = isGood ? 'badge-emerald' : 'badge-amber';
-    const Icon = isNegative ? TrendingDown : TrendingUp;
+  const renderImprovementBadge = (impPct, metricLabel = '') => {
+    if (impPct === undefined || impPct === null) return null;
+    const isPositive = impPct > 0;
+    const isZero = Math.abs(impPct) < 0.01;
+
+    let colorClass = 'badge-emerald';
+    let icon = <TrendingDown size={12} />;
+    let text = `${impPct > 0 ? `+${impPct}` : impPct}%`;
+
+    if (isZero) {
+      colorClass = 'badge-cyan';
+      icon = null;
+      text = '0.0% (Equal)';
+    } else if (!isPositive) {
+      colorClass = 'badge-amber';
+      icon = <TrendingUp size={12} />;
+      text = `${impPct}% (Detour)`;
+    }
 
     return (
       <span className={`badge ${ColorClass}`} style={{ fontSize: '0.72rem' }}>

@@ -157,3 +157,19 @@ def run_baseline(
             )
         )
     return results
+
+
+def compute_baseline_solution_totals(results: List[BaselineResult]) -> Tuple[float, float, float, int]:
+    """
+    Aggregates distance, travel time, congestion, and reachable count across baseline results.
+    """
+    total_d = total_t = total_c = 0.0
+    valid_count = 0
+    for r in results:
+        if r.metrics and r.path:
+            total_d += r.metrics.distance_km
+            total_t += r.metrics.time_min
+            total_c += r.metrics.congestion
+            valid_count += 1
+    return round(total_d, 2), round(total_t, 2), round(total_c, 2), valid_count
+

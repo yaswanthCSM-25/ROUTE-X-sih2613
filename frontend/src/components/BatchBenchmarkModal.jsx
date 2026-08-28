@@ -162,20 +162,48 @@ export default function BatchBenchmarkModal({ isOpen, onClose, currentPreset, fl
               fontSize: '0.84rem',
             }}>
               <div>
-                <span style={{ color: '#94a3b8' }}>Avg Distance Improvement:</span><br />
-                <strong style={{ fontSize: '1.1rem', color: '#34d399' }}>{batchData.summary?.avg_distance_improvement_pct}%</strong>
+                <span style={{ color: '#94a3b8' }}>Distance Improvement:</span><br />
+                <strong style={{ fontSize: '1.05rem', color: '#34d399' }}>
+                  {batchData.summary?.avg_distance_improvement_pct}%
+                </strong>
+                {batchData.statistics?.distance_improvement_pct && (
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    Std: ±{batchData.statistics.distance_improvement_pct.std}% | Range: [{batchData.statistics.distance_improvement_pct.min}%, {batchData.statistics.distance_improvement_pct.max}%]
+                  </div>
+                )}
               </div>
               <div>
-                <span style={{ color: '#94a3b8' }}>Avg Time Improvement:</span><br />
-                <strong style={{ fontSize: '1.1rem', color: '#38bdf8' }}>{batchData.summary?.avg_time_improvement_pct}%</strong>
+                <span style={{ color: '#94a3b8' }}>Travel Time Improvement:</span><br />
+                <strong style={{ fontSize: '1.05rem', color: '#38bdf8' }}>
+                  {batchData.summary?.avg_time_improvement_pct}%
+                </strong>
+                {batchData.statistics?.time_improvement_pct && (
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    Std: ±{batchData.statistics.time_improvement_pct.std}% | Range: [{batchData.statistics.time_improvement_pct.min}%, {batchData.statistics.time_improvement_pct.max}%]
+                  </div>
+                )}
               </div>
               <div>
-                <span style={{ color: '#94a3b8' }}>Mean Swarm Fitness:</span><br />
-                <strong style={{ fontSize: '1.1rem', color: '#f8fafc', fontFamily: 'JetBrains Mono' }}>{batchData.summary?.avg_fitness}</strong>
+                <span style={{ color: '#94a3b8' }}>Mean Objective Fitness:</span><br />
+                <strong style={{ fontSize: '1.05rem', color: '#f8fafc', fontFamily: 'JetBrains Mono' }}>
+                  {batchData.summary?.avg_fitness}
+                </strong>
+                {batchData.statistics?.qpso_fitness && (
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    Std: ±{batchData.statistics.qpso_fitness.std}
+                  </div>
+                )}
               </div>
               <div>
-                <span style={{ color: '#94a3b8' }}>Avg Execution Runtime:</span><br />
-                <strong style={{ fontSize: '1.1rem', color: '#f8fafc' }}>{batchData.summary?.avg_runtime_sec} s</strong>
+                <span style={{ color: '#94a3b8' }}>Execution Runtime:</span><br />
+                <strong style={{ fontSize: '1.05rem', color: '#f8fafc' }}>
+                  {batchData.summary?.avg_runtime_sec} s
+                </strong>
+                {batchData.statistics?.runtime_sec && (
+                  <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
+                    Range: [{batchData.statistics.runtime_sec.min}s, {batchData.statistics.runtime_sec.max}s]
+                  </div>
+                )}
               </div>
             </div>
           </div>

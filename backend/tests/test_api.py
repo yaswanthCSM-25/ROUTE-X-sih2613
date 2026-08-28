@@ -1,4 +1,4 @@
-"""Integration tests for FastAPI REST API."""
+"""Integration tests for FastAPI REST API (SIH26137)."""
 
 from fastapi.testclient import TestClient
 from app.api import app
@@ -20,6 +20,16 @@ def test_api_info():
     assert len(data["deliverables"]) >= 8
 
 
+def test_api_scenarios_and_network():
+    res = client.get("/api/scenarios")
+    assert res.status_code == 200
+    assert len(res.json()["scenarios"]) >= 3
+
+    res_net = client.get("/api/network?preset=demo")
+    assert res_net.status_code == 200
+    assert len(res_net.json()["nodes"]) == 9
+
+
 def test_api_optimize():
     payload = {
         "preset": "demo",
@@ -35,6 +45,7 @@ def test_api_optimize():
     assert "convergence" in data
     assert "routes" in data
     assert data["qpso"]["invalid_routes"] == 0
+    assert data["baseline"]["fitness"] >= 0.0
 
 
 def test_api_incident_endpoint():
@@ -50,3 +61,11 @@ def test_api_incident_endpoint():
     data = res.json()
     assert "pre_incident" in data
     assert "post_incident" in data
+
+
+def test_api_scalability_endpoint():
+    res = client.get("/api/benchmark/scalability?seed=42")
+    assert res.status_code == 200
+    data = res.json()
+    assert "stages" in data
+    assert len(data["stages"]) == 4
