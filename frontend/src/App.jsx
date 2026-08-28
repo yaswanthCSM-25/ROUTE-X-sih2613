@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
-import NetworkMap from './components/NetworkMap';
-import ControlPanel from './components/ControlPanel';
-import MetricsComparison from './components/MetricsComparison';
-import ConvergenceChart from './components/ConvergenceChart';
-import VehicleRoutesTable from './components/VehicleRoutesTable';
-import VehicleSimulator from './components/VehicleSimulator';
-import IncidentSimulator from './components/IncidentSimulator';
-import DeliverablesModal from './components/DeliverablesModal';
-import BatchBenchmarkModal from './components/BatchBenchmarkModal';
+import OverviewPage from './pages/OverviewPage';
+import SimulationPage from './pages/SimulationPage';
+import MathModelPage from './pages/MathModelPage';
+import OptimizationPage from './pages/OptimizationPage';
+import RoutesPage from './pages/RoutesPage';
+import ResultsPage from './pages/ResultsPage';
+import ConvergencePage from './pages/ConvergencePage';
+import BenchmarkPage from './pages/BenchmarkPage';
+import DynamicRoutingPage from './pages/DynamicRoutingPage';
+import ArchitecturePage from './pages/ArchitecturePage';
+import AboutSihPage from './pages/AboutSihPage';
+
 import {
   fetchHealth,
   fetchProjectInfo,
@@ -21,6 +24,7 @@ import {
 } from './services/api';
 
 export default function App() {
+  const [activePage, setActivePage] = useState('overview');
   const [backendOnline, setBackendOnline] = useState(false);
   const [projectInfo, setProjectInfo] = useState(null);
   const [scenarios, setScenarios] = useState([
@@ -43,7 +47,7 @@ export default function App() {
   // Optimization params, weights & BPR parameters
   const [params, setParams] = useState({
     num_particles: 20,
-    num_iterations: 50,
+    num_iterations: 35,
     traffic_seed: 42,
   });
   const [weights, setWeights] = useState({
@@ -61,19 +65,6 @@ export default function App() {
   const [incidentResult, setIncidentResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
-
-  // UI state
-  const [selectedVehicleId, setSelectedVehicleId] = useState(null);
-  const [showBaselineOverlay, setShowBaselineOverlay] = useState(true);
-  const [showQpsoOverlay, setShowQpsoOverlay] = useState(true);
-  const [isDeliverablesOpen, setIsDeliverablesOpen] = useState(false);
-  const [isBatchBenchmarkOpen, setIsBatchBenchmarkOpen] = useState(false);
-
-  // Simulation playback state
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simProgress, setSimProgress] = useState(0);
-  const [simSpeed, setSimSpeed] = useState(1);
-  const animRef = useRef(null);
 
   // Initial Data Load
   useEffect(() => {
@@ -96,10 +87,7 @@ export default function App() {
   const loadScenario = async (presetId) => {
     setCurrentPreset(presetId);
     setRoadOverrides({});
-    setSelectedVehicleId(null);
     setIncidentResult(null);
-    setSimProgress(0);
-    setIsSimulating(false);
 
     const defaultCount = presetId === 'metropolitan' ? 20 : (presetId === 'smart_grid' ? 10 : 5);
     setFleetSize(defaultCount);
@@ -186,7 +174,6 @@ export default function App() {
     };
     setRoadOverrides(updatedOverrides);
 
-    // Optimistically update network
     if (network?.roads) {
       const updatedRoads = network.roads.map((r) => {
         if ((r.source === source && r.target === target) || (r.source === target && r.target === source)) {
@@ -234,7 +221,7 @@ export default function App() {
     loadScenario(currentPreset);
   };
 
-  // Vehicle Fleet management
+  // Fleet management
   const handleAddVehicle = () => {
     const nodes = (network?.nodes || []).map((n) => n.id);
     if (nodes.length < 2) return;
@@ -255,57 +242,74 @@ export default function App() {
     setVehicles(updated);
   };
 
-  // Simulation Animation Loop
-  useEffect(() => {
-    if (!isSimulating) {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-      return;
-    }
-
-    let lastTime = performance.now();
-    const animate = (now) => {
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
-
-      setSimProgress((prev) => {
-        const next = prev + delta * 0.15 * simSpeed;
-        if (next >= 1.0) {
-          setIsSimulating(false);
-          return 1.0;
-        }
-        return next;
-      });
-
-      animRef.current = requestAnimationFrame(animate);
-    };
-
-    animRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-    };
-  }, [isSimulating, simSpeed]);
-
   const availableNodes = (network?.nodes || []).map((n) => n.id);
-  const baselineRoutes = benchmark?.routes?.baseline || [];
-  const qpsoRoutes = benchmark?.routes?.qpso || [];
 
   return (
     <div className="app-container">
-      {/* Top Header */}
+      {/* Upper Navigation Header */}
       <Header
+        activePage={activePage}
+        onNavigate={setActivePage}
         backendOnline={backendOnline}
         scenarios={scenarios}
         currentPreset={currentPreset}
         onSelectPreset={loadScenario}
-        onOpenDeliverables={() => setIsDeliverablesOpen(true)}
-        onOpenBatchBenchmark={() => setIsBatchBenchmarkOpen(true)}
       />
 
-      {/* Main Grid Content */}
-      <main className="main-content">
-        {/* Left Column: Control Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <ControlPanel
+      {/* Main Page Content Body */}
+      <main style={{ padding: '24px 28px', maxWidth: 1720, margin: '0 auto', width: '100%' }}>
+        {activePage === 'overview' && (
+          <OverviewPage
+            onNavigate={setActivePage}
+            currentPreset={currentPreset}
+            backendOnline={backendOnline}
+            benchmark={benchmark}
+          />
+        )}
+
+        {activePage === 'simulation' && (
+          <SimulationPage
+            network={network}
+            traffic={traffic}
+            scenarios={scenarios}
+            currentPreset={currentPreset}
+            onSelectPreset={loadScenario}
+            onToggleRoadStatus={handleToggleRoadStatus}
+            fleetSize={fleetSize}
+            onChangeFleetSize={(sz) => {
+              setFleetSize(sz);
+              fetchVehicles(currentPreset, sz).then((v) => {
+                if (v?.vehicles) {
+                  setVehicles(v.vehicles);
+                  runOptimizationWithConfig({
+                    preset: currentPreset,
+                    num_particles: params.num_particles,
+                    num_iterations: params.num_iterations,
+                    traffic_seed: params.traffic_seed,
+                    weights,
+                    custom_vehicles: v.vehicles,
+                    fleet_size: sz,
+                    road_status_overrides: roadOverrides,
+                    baseline_method: baselineMethod,
+                    bpr_alpha: bprParams.alpha,
+                    bpr_beta: bprParams.beta,
+                  });
+                }
+              });
+            }}
+            vehicles={vehicles}
+            params={params}
+            onChangeParams={setParams}
+            onRunOptimization={handleRunOptimization}
+            isLoading={isLoading}
+            benchmark={benchmark}
+          />
+        )}
+
+        {activePage === 'math_model' && <MathModelPage />}
+
+        {activePage === 'optimization' && (
+          <OptimizationPage
             params={params}
             onChangeParams={setParams}
             weights={weights}
@@ -359,88 +363,54 @@ export default function App() {
             onRunOptimization={handleRunOptimization}
             isLoading={isLoading}
             elapsedTime={elapsedTime}
+            benchmark={benchmark}
           />
-        </div>
+        )}
 
-        {/* Right Column: Visualization & Benchmarks */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {/* Key Metrics Comparison */}
-          <MetricsComparison benchmark={benchmark} />
+        {activePage === 'routes' && (
+          <RoutesPage
+            network={network}
+            traffic={traffic}
+            benchmark={benchmark}
+            onToggleRoadStatus={handleToggleRoadStatus}
+          />
+        )}
 
-          {/* Dynamic Incident Simulator Bar */}
-          <IncidentSimulator
-            roads={network?.roads || []}
+        {activePage === 'results' && (
+          <ResultsPage
+            benchmark={benchmark}
+            baselineMethod={baselineMethod}
+          />
+        )}
+
+        {activePage === 'convergence' && (
+          <ConvergencePage benchmark={benchmark} />
+        )}
+
+        {activePage === 'benchmark' && (
+          <BenchmarkPage
+            currentPreset={currentPreset}
+            fleetSize={fleetSize}
+          />
+        )}
+
+        {activePage === 'dynamic_routing' && (
+          <DynamicRoutingPage
+            network={network}
+            traffic={traffic}
             currentPreset={currentPreset}
             onInjectIncident={handleInjectIncident}
             onClearIncidents={handleClearIncidents}
             incidentResult={incidentResult}
             isLoading={isLoading}
-          />
-
-          {/* Interactive Map Visualizer */}
-          <NetworkMap
-            network={network}
-            traffic={traffic}
-            baselineRoutes={baselineRoutes}
-            qpsoRoutes={qpsoRoutes}
-            selectedVehicleId={selectedVehicleId}
-            onSelectVehicle={setSelectedVehicleId}
             onToggleRoadStatus={handleToggleRoadStatus}
-            simProgress={simProgress}
-            isSimulating={isSimulating}
-            showBaselineOverlay={showBaselineOverlay}
-            showQpsoOverlay={showQpsoOverlay}
-            onToggleBaselineOverlay={() => setShowBaselineOverlay(!showBaselineOverlay)}
-            onToggleQpsoOverlay={() => setShowQpsoOverlay(!showQpsoOverlay)}
           />
+        )}
 
-          {/* Vehicle Simulation Playback Scrubber */}
-          <VehicleSimulator
-            isSimulating={isSimulating}
-            simProgress={simProgress}
-            onToggleSimulate={() => {
-              if (simProgress >= 1) setSimProgress(0);
-              setIsSimulating(!isSimulating);
-            }}
-            onResetSimulate={() => {
-              setIsSimulating(false);
-              setSimProgress(0);
-            }}
-            simSpeed={simSpeed}
-            onChangeSpeed={setSimSpeed}
-            onSeekProgress={(val) => {
-              setSimProgress(val);
-              if (val < 1) setIsSimulating(false);
-            }}
-          />
+        {activePage === 'architecture' && <ArchitecturePage />}
 
-          {/* Convergence Analytics Chart */}
-          <ConvergenceChart convergence={benchmark?.convergence} />
-
-          {/* Turn-by-Turn Fleet Routes Table */}
-          <VehicleRoutesTable
-            baselineRoutes={baselineRoutes}
-            qpsoRoutes={qpsoRoutes}
-            selectedVehicleId={selectedVehicleId}
-            onSelectVehicle={setSelectedVehicleId}
-          />
-        </div>
+        {activePage === 'about_sih' && <AboutSihPage info={projectInfo} />}
       </main>
-
-      {/* Deliverables Modal */}
-      <DeliverablesModal
-        isOpen={isDeliverablesOpen}
-        onClose={() => setIsDeliverablesOpen(false)}
-        info={projectInfo}
-      />
-
-      {/* Multi-Seed Batch Repeatability Modal */}
-      <BatchBenchmarkModal
-        isOpen={isBatchBenchmarkOpen}
-        onClose={() => setIsBatchBenchmarkOpen(false)}
-        currentPreset={currentPreset}
-        fleetSize={fleetSize}
-      />
     </div>
   );
 }
