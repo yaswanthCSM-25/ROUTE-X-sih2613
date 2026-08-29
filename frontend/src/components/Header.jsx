@@ -12,6 +12,8 @@ import {
   AlertTriangle,
   Compass,
   FileText,
+  Radio,
+  Zap,
 } from 'lucide-react';
 
 export default function Header({
@@ -23,68 +25,81 @@ export default function Header({
   onSelectPreset,
 }) {
   const navItems = [
-    { id: 'overview', label: '1. Overview', icon: Compass },
-    { id: 'simulation', label: '2. Simulation', icon: Navigation },
+    { id: 'simulation', label: '1. Simulation Lab', icon: Navigation },
+    { id: 'overview', label: '2. Overview', icon: Compass },
     { id: 'math_model', label: '3. Math Model', icon: BookOpen },
-    { id: 'optimization', label: '4. Optimization', icon: Sliders },
-    { id: 'routes', label: '5. Routes', icon: Navigation },
-    { id: 'results', label: '6. Results', icon: Award },
+    { id: 'optimization', label: '4. Swarm Studio', icon: Sliders },
+    { id: 'routes', label: '5. Routes & Fleet', icon: Navigation },
+    { id: 'results', label: '6. Scorecard', icon: Award },
     { id: 'convergence', label: '7. Convergence', icon: TrendingDown },
     { id: 'benchmark', label: '8. Benchmark', icon: BarChart2 },
-    { id: 'dynamic_routing', label: '9. Dynamic Routing', icon: AlertTriangle },
+    { id: 'dynamic_routing', label: '9. Dynamic Rerouting', icon: AlertTriangle },
     { id: 'architecture', label: '10. Architecture', icon: Layers },
     { id: 'about_sih', label: '11. About SIH', icon: FileText },
   ];
 
   return (
     <header style={{
-      background: 'rgba(8, 12, 22, 0.95)',
-      backdropFilter: 'blur(20px)',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+      background: 'rgba(5, 11, 20, 0.92)',
+      backdropFilter: 'blur(24px)',
+      borderBottom: '1px solid rgba(0, 240, 255, 0.25)',
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      boxShadow: '0 4px 24px rgba(0, 0, 0, 0.5)',
+      boxShadow: '0 4px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.1)',
     }}>
       {/* Upper Branding & Utility Bar */}
       <div style={{
         maxWidth: 1720,
         margin: '0 auto',
-        padding: '12px 28px',
+        padding: '10px 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: 14,
-        borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+        gap: 12,
+        borderBottom: '1px solid rgba(0, 240, 255, 0.08)',
       }}>
-        {/* Branding */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Branding with Holographic Emblem */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
-            width: 38,
-            height: 38,
+            width: 40,
+            height: 40,
             borderRadius: 10,
-            background: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)',
+            background: 'linear-gradient(135deg, #00f0ff 0%, #0284c7 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 15px rgba(16, 185, 129, 0.4)',
+            boxShadow: '0 0 20px rgba(0, 240, 255, 0.6)',
+            border: '1px solid #ffffff',
+            position: 'relative',
           }}>
-            <Cpu size={22} color="#ffffff" />
+            <Cpu size={22} color="#030712" />
+            <span style={{
+              position: 'absolute',
+              top: -2,
+              right: -2,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: '#ff6b00',
+              boxShadow: '0 0 8px #ff6b00',
+            }} />
           </div>
+
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#f8fafc', letterSpacing: '-0.02em' }}>
-                Route Planner
+              <h1 className="font-orbitron" style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f0fdf4', letterSpacing: '0.05em' }}>
+                ROUTE PLANNER
               </h1>
-              <span className="badge badge-emerald" style={{ fontSize: '0.72rem' }}>
+              <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
                 <Sparkles size={11} /> SIH26137
               </span>
-              <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
+              <span className="badge badge-orange" style={{ fontSize: '0.72rem' }}>
                 Egreen Quanta
               </span>
             </div>
-            <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: 1 }}>
+            <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: 1, letterSpacing: '0.02em' }}>
               Quantum-Inspired Intelligent Traffic Route Optimization in Transportation Systems
             </p>
           </div>
@@ -94,76 +109,79 @@ export default function Header({
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {/* Scenario Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>SCENARIO:</span>
+            <span style={{ fontSize: '0.72rem', color: '#00f0ff', fontWeight: 700, fontFamily: 'JetBrains Mono', letterSpacing: '0.05em' }}>
+              SCENARIO:
+            </span>
             <div style={{
               display: 'flex',
-              background: 'rgba(15, 23, 42, 0.8)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(8, 18, 38, 0.9)',
+              border: '1px solid rgba(0, 240, 255, 0.3)',
               borderRadius: 8,
               padding: 2,
               gap: 2,
             }}>
-              {scenarios.map((s) => {
-                const active = currentPreset === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => onSelectPreset(s.id)}
-                    style={{
-                      background: active ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                      border: active ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
-                      color: active ? '#34d399' : '#94a3b8',
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      fontSize: '0.74rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {s.name}
-                  </button>
-                );
-              })}
+              {(scenarios || []).map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => onSelectPreset(s.id)}
+                  style={{
+                    background: currentPreset === s.id ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.3) 0%, rgba(2, 132, 199, 0.4) 100%)' : 'transparent',
+                    border: currentPreset === s.id ? '1px solid #00f0ff' : '1px solid transparent',
+                    color: currentPreset === s.id ? '#00f0ff' : '#94a3b8',
+                    padding: '4px 10px',
+                    borderRadius: 6,
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    boxShadow: currentPreset === s.id ? '0 0 10px rgba(0, 240, 255, 0.3)' : 'none',
+                  }}
+                >
+                  {s.name?.replace(' Demo', '')}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Backend Status */}
+          {/* Backend Status Indicator */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '5px 10px',
-            background: 'rgba(15, 23, 42, 0.6)',
-            borderRadius: 7,
-            border: '1px solid rgba(255, 255, 255, 0.06)',
+            padding: '5px 12px',
+            background: 'rgba(8, 18, 38, 0.9)',
+            border: backendOnline ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(244, 63, 94, 0.4)',
+            borderRadius: 20,
             fontSize: '0.74rem',
-            color: backendOnline ? '#34d399' : '#f43f5e',
+            fontFamily: 'JetBrains Mono',
           }}>
             <span style={{
-              width: 7,
-              height: 7,
+              width: 8,
+              height: 8,
               borderRadius: '50%',
               background: backendOnline ? '#10b981' : '#f43f5e',
-              boxShadow: backendOnline ? '0 0 8px #10b981' : '0 0 8px #f43f5e',
+              boxShadow: backendOnline ? '0 0 10px #10b981' : '0 0 10px #f43f5e',
             }} />
-            <span style={{ fontWeight: 600 }}>{backendOnline ? 'API Connected' : 'API Offline'}</span>
+            <span style={{ color: backendOnline ? '#34d399' : '#f43f5e', fontWeight: 700 }}>
+              {backendOnline ? 'QUANTUM ENGINE READY' : 'OFFLINE'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Lower Technical Multi-Page Tab Bar */}
-      <div style={{
+      {/* Horizontal Nav Bar with High-Tech Luminous Tabs */}
+      <nav style={{
         maxWidth: 1720,
         margin: '0 auto',
-        padding: '0 28px',
+        padding: '4px 20px',
         display: 'flex',
-        overflowX: 'auto',
+        alignItems: 'center',
         gap: 4,
+        overflowX: 'auto',
       }}>
         {navItems.map((item) => {
-          const active = activePage === item.id;
           const Icon = item.icon;
+          const isActive = activePage === item.id;
           return (
             <button
               key={item.id}
@@ -171,25 +189,27 @@ export default function Header({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '10px 14px',
-                background: 'transparent',
+                gap: 7,
+                padding: '8px 14px',
+                background: isActive ? 'linear-gradient(180deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 240, 255, 0.02) 100%)' : 'transparent',
                 border: 'none',
-                borderBottom: active ? '2px solid #10b981' : '2px solid transparent',
-                color: active ? '#34d399' : '#94a3b8',
+                borderBottom: isActive ? '2px solid #00f0ff' : '2px solid transparent',
+                borderRadius: '6px 6px 0 0',
+                color: isActive ? '#00f0ff' : '#94a3b8',
                 fontSize: '0.8rem',
-                fontWeight: active ? 700 : 500,
+                fontWeight: isActive ? 700 : 500,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.15s ease',
+                boxShadow: isActive ? '0 4px 15px rgba(0, 240, 255, 0.2)' : 'none',
               }}
             >
-              <Icon size={14} color={active ? '#34d399' : '#64748b'} />
+              <Icon size={14} color={isActive ? '#00f0ff' : '#64748b'} />
               <span>{item.label}</span>
             </button>
           );
         })}
-      </div>
+      </nav>
     </header>
   );
 }

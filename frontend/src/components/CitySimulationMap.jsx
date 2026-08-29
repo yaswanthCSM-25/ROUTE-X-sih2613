@@ -18,6 +18,9 @@ import {
   Flame,
   CheckCircle2,
   X,
+  Radio,
+  Activity,
+  Layers,
 } from 'lucide-react';
 
 export default function CitySimulationMap({
@@ -40,7 +43,7 @@ export default function CitySimulationMap({
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Selected Map Object Popover State
-  const [selectedElement, setSelectedElement] = useState(null); // { type: 'road'|'node'|'vehicle'|'event', data, x, y }
+  const [selectedElement, setSelectedElement] = useState(null);
 
   // 1. Compute Base Network Layout and City Elements
   const cityLayout = useMemo(() => {
@@ -52,6 +55,8 @@ export default function CitySimulationMap({
         buildings: [],
         trees: [],
         nodeMap: {},
+        centerX: 500,
+        centerY: 300,
       };
     }
 
@@ -66,7 +71,7 @@ export default function CitySimulationMap({
       if (n.y > maxY) maxY = n.y;
     });
 
-    const padding = 120;
+    const padding = 130;
     const width = Math.max(900, maxX - minX + padding * 2);
     const height = Math.max(550, maxY - minY + padding * 2);
     const vb = `${minX - padding} ${minY - padding} ${width} ${height}`;
@@ -82,10 +87,9 @@ export default function CitySimulationMap({
       }
     });
 
-    // Procedural 2D Buildings & Greenery around road corridors
+    // Procedural 2D Holographic Buildings & Greenery
     const buildings = [];
     const trees = [];
-    const seed = 42;
 
     uniqueRoads.forEach((r, idx) => {
       const u = nMap[r.source];
@@ -100,31 +104,25 @@ export default function CitySimulationMap({
       const nx = -dy / len;
       const ny = dx / len;
 
-      // Place buildings on side of road
-      const offsetDist = 45;
+      // Place holographic tech buildings
+      const offsetDist = 48;
       buildings.push({
         id: `bldg-${idx}-1`,
         x: midX + nx * offsetDist,
         y: midY + ny * offsetDist,
-        w: 38 + (idx % 3) * 10,
-        h: 30 + (idx % 4) * 8,
-        type: idx % 3 === 0 ? 'tower' : (idx % 3 === 1 ? 'commercial' : 'house'),
-        color: idx % 3 === 0 ? '#1e293b' : (idx % 3 === 1 ? '#334155' : '#0f172a'),
-        roofColor: idx % 3 === 0 ? '#38bdf8' : (idx % 3 === 1 ? '#0284c7' : '#0ea5e9'),
+        w: 36 + (idx % 3) * 10,
+        h: 28 + (idx % 4) * 8,
+        type: idx % 3 === 0 ? 'tower' : 'hub',
+        color: idx % 3 === 0 ? 'rgba(0, 240, 255, 0.12)' : 'rgba(2, 132, 199, 0.15)',
+        roofColor: idx % 3 === 0 ? '#00f0ff' : '#38bdf8',
       });
 
-      // Place trees in greenery pockets
+      // Place data telemetry nodes / trees
       trees.push({
         id: `tree-${idx}-1`,
-        x: midX - nx * 35 + (idx % 20) - 10,
-        y: midY - ny * 35 + (idx % 20) - 10,
-        r: 10 + (idx % 4) * 2,
-      });
-      trees.push({
-        id: `tree-${idx}-2`,
-        x: midX + nx * 75,
-        y: midY + ny * 75,
-        r: 9 + (idx % 3) * 2,
+        x: midX - nx * 36 + (idx % 20) - 10,
+        y: midY - ny * 36 + (idx % 20) - 10,
+        r: 8 + (idx % 3) * 2,
       });
     });
 
@@ -135,6 +133,8 @@ export default function CitySimulationMap({
       buildings,
       trees,
       nodeMap: nMap,
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2,
     };
   }, [network]);
 
@@ -187,23 +187,10 @@ export default function CitySimulationMap({
   // Road Width derivation based on capacity
   const getRoadWidth = (road) => {
     const cap = road.capacity_vehicles || 6;
-    if (cap <= 4) return 14; // 1-lane narrow
-    if (cap <= 8) return 22; // 2-lane medium
-    return 32; // 4-lane wide
+    if (cap <= 4) return 16;
+    if (cap <= 8) return 24;
+    return 34;
   };
-
-  // Weather Ambience
-  const weatherMode = config?.conditions?.weather || 'Normal';
-  const timeOfDay = config?.traffic?.timeOfDay || '08:00 AM';
-
-  const isNight = timeOfDay.includes('PM') && (parseInt(timeOfDay) >= 8 || parseInt(timeOfDay) === 12);
-  const isDusk = timeOfDay.includes('PM') && (parseInt(timeOfDay) >= 5 && parseInt(timeOfDay) < 8);
-
-  const ambientBg = isNight
-    ? 'linear-gradient(135deg, #030712 0%, #0b1329 100%)'
-    : isDusk
-    ? 'linear-gradient(135deg, #18181b 0%, #1e1b4b 100%)'
-    : 'linear-gradient(135deg, #090d16 0%, #0f172a 100%)';
 
   // Vehicles to render
   const renderedVehicles = useMemo(() => {
@@ -246,16 +233,16 @@ export default function CitySimulationMap({
         width: '100%',
         height: 'calc(100vh - 120px)',
         minHeight: 640,
-        background: ambientBg,
+        background: 'radial-gradient(circle at 50% 50%, #081630 0%, #030712 100%)',
         borderRadius: 16,
         overflow: 'hidden',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
-        border: '1px solid rgba(56, 189, 248, 0.25)',
+        boxShadow: '0 16px 50px rgba(0,0,0,0.8), 0 0 35px rgba(0, 240, 255, 0.15)',
+        border: '1px solid rgba(0, 240, 255, 0.35)',
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
       }}
     >
-      {/* 1. Full-Screen Interactive City SVG Map */}
+      {/* 1. Full-Screen Interactive Cyber-Holographic SVG Canvas */}
       <svg
         style={{
           width: '100%',
@@ -267,53 +254,97 @@ export default function CitySimulationMap({
         viewBox={cityLayout.viewBox}
       >
         <defs>
-          {/* Street Asphalt Texture Pattern */}
-          <linearGradient id="asphaltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1e293b" />
-            <stop offset="100%" stopColor="#0f172a" />
-          </linearGradient>
-
-          {/* Road Highlight Glow for Optimized Corridor */}
-          <filter id="corridorGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="5" result="blur" />
+          {/* Cyber Neon Glow Filter */}
+          <filter id="neonCyanGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
 
-          {/* Vehicle Marker Filter */}
-          <filter id="vehicleShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="1" dy="3" stdDeviation="2" floodColor="#000000" floodOpacity="0.6" />
+          <filter id="neonOrangeGlow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="8" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
           </filter>
+
+          {/* Hologram Cyber Road Linear Gradient */}
+          <linearGradient id="cyberRoadGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#081b3a" />
+            <stop offset="50%" stopColor="#0a2550" />
+            <stop offset="100%" stopColor="#051329" />
+          </linearGradient>
+
+          {/* Grid Pattern */}
+          <pattern id="hudGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0, 240, 255, 0.05)" strokeWidth="1" />
+            <circle cx="40" cy="40" r="1.5" fill="rgba(0, 240, 255, 0.15)" />
+          </pattern>
         </defs>
 
-        {/* --- Background Parks & Landscaped Zones --- */}
-        {cityLayout.nodes.map((n, i) => (
+        {/* Global Holographic Background Grid */}
+        <rect x="-1000" y="-1000" width="3000" height="3000" fill="url(#hudGrid)" />
+
+        {/* --- Concentric Holographic HUD Telemetry Circles (India Satellite Theme) --- */}
+        <g transform={`translate(${cityLayout.centerX}, ${cityLayout.centerY})`}>
+          {/* Outer Rotating Orange Arc Ring */}
           <circle
-            key={`zone-${i}`}
-            cx={n.x}
-            cy={n.y}
-            r={70}
-            fill="rgba(16, 185, 129, 0.04)"
-            stroke="rgba(16, 185, 129, 0.08)"
+            cx="0"
+            cy="0"
+            r="380"
+            fill="none"
+            stroke="rgba(255, 107, 0, 0.25)"
+            strokeWidth="1.5"
+            strokeDasharray="40 160 80 120"
+            className="animate-radar"
+          />
+          {/* Main Cyan Telemetry Ring with Tick Marks */}
+          <circle
+            cx="0"
+            cy="0"
+            r="320"
+            fill="none"
+            stroke="rgba(0, 240, 255, 0.4)"
+            strokeWidth="2"
+            strokeDasharray="12 8 4 8"
+          />
+          {/* Glowing Inner Radar Sweep Ring */}
+          <circle
+            cx="0"
+            cy="0"
+            r="240"
+            fill="none"
+            stroke="rgba(0, 240, 255, 0.3)"
+            strokeWidth="1.5"
+            strokeDasharray="180 60 120 40"
+            className="animate-radar"
+            style={{ animationDuration: '22s', animationDirection: 'reverse' }}
+          />
+          {/* Core Compass Radar Disc */}
+          <circle
+            cx="0"
+            cy="0"
+            r="160"
+            fill="rgba(0, 240, 255, 0.02)"
+            stroke="rgba(0, 240, 255, 0.15)"
             strokeWidth="1"
           />
-        ))}
+        </g>
 
-        {/* --- 2D Illustrated Buildings with 3D/Isometric Shadows --- */}
+        {/* --- Holographic Tech Buildings --- */}
         {cityLayout.buildings.map((b) => (
           <g key={b.id}>
-            {/* Building Ground Shadow */}
             <rect
               x={b.x - b.w / 2 + 4}
               y={b.y - b.h / 2 + 4}
               width={b.w}
               height={b.h}
               rx="4"
-              fill="rgba(0, 0, 0, 0.35)"
+              fill="rgba(0, 0, 0, 0.5)"
             />
-            {/* Building Body */}
             <rect
               x={b.x - b.w / 2}
               y={b.y - b.h / 2}
@@ -321,32 +352,29 @@ export default function CitySimulationMap({
               height={b.h}
               rx="4"
               fill={b.color}
-              stroke="rgba(255, 255, 255, 0.1)"
+              stroke="rgba(0, 240, 255, 0.3)"
+              strokeWidth="1.5"
+            />
+            <line
+              x1={b.x - b.w / 2 + 4}
+              y1={b.y}
+              x2={b.x + b.w / 2 - 4}
+              y2={b.y}
+              stroke="rgba(0, 240, 255, 0.4)"
               strokeWidth="1"
             />
-            {/* Building Roof Accent */}
-            <rect
-              x={b.x - b.w / 2 + 3}
-              y={b.y - b.h / 2 + 3}
-              width={b.w - 6}
-              height={b.h - 6}
-              rx="2"
-              fill={b.roofColor}
-              opacity="0.25"
-            />
           </g>
         ))}
 
-        {/* --- Green Trees with Canopy Cast Shadows --- */}
+        {/* --- Holographic Tree Clusters / Data Nodes --- */}
         {cityLayout.trees.map((t) => (
           <g key={t.id}>
-            <circle cx={t.x + 2} cy={t.y + 2} r={t.r} fill="rgba(0, 0, 0, 0.25)" />
-            <circle cx={t.x} cy={t.y} r={t.r} fill="#10b981" opacity="0.65" />
-            <circle cx={t.x - 2} cy={t.y - 2} r={t.r * 0.65} fill="#34d399" opacity="0.85" />
+            <circle cx={t.x} cy={t.y} r={t.r} fill="rgba(16, 185, 129, 0.2)" stroke="#10b981" strokeWidth="1" />
+            <circle cx={t.x} cy={t.y} r="2" fill="#00f0ff" />
           </g>
         ))}
 
-        {/* --- Roads Layer (Curved / Branching Asphalt Corridors) --- */}
+        {/* --- Cyber Road Corridors Layer --- */}
         {cityLayout.roads.map((road) => {
           const u = cityLayout.nodeMap[road.source];
           const v = cityLayout.nodeMap[road.target];
@@ -370,47 +398,58 @@ export default function CitySimulationMap({
               }}
               style={{ cursor: 'pointer' }}
             >
-              {/* Sidewalk Curb / Road Border */}
+              {/* Outer Neon Cyber Road Border Glow */}
               <line
                 x1={u.x}
                 y1={u.y}
                 x2={v.x}
                 y2={v.y}
-                stroke="#475569"
-                strokeWidth={width + 4}
+                stroke={isClosed ? 'rgba(244, 63, 94, 0.4)' : 'rgba(0, 240, 255, 0.35)'}
+                strokeWidth={width + 6}
                 strokeLinecap="round"
               />
 
-              {/* Asphalt Road Surface */}
+              {/* Asphalt Road Bed */}
               <line
                 x1={u.x}
                 y1={u.y}
                 x2={v.x}
                 y2={v.y}
-                stroke={isClosed ? '#334155' : 'url(#asphaltGrad)'}
+                stroke="url(#cyberRoadGrad)"
                 strokeWidth={width}
                 strokeLinecap="round"
               />
 
-              {/* Center Dashed Lane Divider Markings */}
+              {/* Glowing Center Line Divider */}
               {!isClosed && (
                 <line
                   x1={u.x}
                   y1={u.y}
                   x2={v.x}
                   y2={v.y}
-                  stroke={width > 20 ? '#fbbf24' : '#f8fafc'}
-                  strokeWidth="1.5"
-                  strokeDasharray="6 6"
-                  opacity="0.75"
+                  stroke="#00f0ff"
+                  strokeWidth="2"
+                  strokeDasharray="8 6"
+                  opacity="0.85"
+                  filter="url(#neonCyanGlow)"
                 />
+              )}
+
+              {/* Directional One-Way Laser Arrow */}
+              {config?.roadNetwork?.oneWay === 'ON' && !isClosed && (
+                <g transform={`translate(${(u.x + v.x) / 2}, ${(u.y + v.y) / 2})`}>
+                  <circle cx="0" cy="0" r="8" fill="rgba(0, 240, 255, 0.3)" />
+                  <text x="0" y="3" fill="#00f0ff" fontSize="8" fontWeight="bold" textAnchor="middle">
+                    ➔
+                  </text>
+                </g>
               )}
 
               {/* Road Closure Hazard Barricades */}
               {isClosed && (
                 <g transform={`translate(${(u.x + v.x) / 2}, ${(u.y + v.y) / 2})`}>
-                  <rect x="-18" y="-8" width="36" height="16" rx="3" fill="#dc2626" stroke="#ffffff" strokeWidth="1.5" />
-                  <text x="0" y="4" fill="#ffffff" fontSize="8" fontWeight="bold" textAnchor="middle">
+                  <rect x="-24" y="-10" width="48" height="20" rx="4" fill="#f43f5e" stroke="#ffffff" strokeWidth="2" filter="url(#neonOrangeGlow)" />
+                  <text x="0" y="4" fill="#ffffff" fontSize="9" fontWeight="900" textAnchor="middle" letterSpacing="0.05em">
                     CLOSED
                   </text>
                 </g>
@@ -419,7 +458,7 @@ export default function CitySimulationMap({
           );
         })}
 
-        {/* --- Active Optimized Routes Overlay (if available) --- */}
+        {/* --- Active Quantum QPSO Routes Holographic Overlay --- */}
         {benchmark?.routes?.qpso && (
           <g>
             {benchmark.routes.qpso.map((vRoute, idx) => {
@@ -437,11 +476,11 @@ export default function CitySimulationMap({
                   d={pathD}
                   fill="none"
                   stroke="#34d399"
-                  strokeWidth="4"
+                  strokeWidth="5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeOpacity="0.85"
-                  filter="url(#corridorGlow)"
+                  strokeOpacity="0.9"
+                  filter="url(#neonCyanGlow)"
                 />
               );
             })}
@@ -463,49 +502,47 @@ export default function CitySimulationMap({
             }}
             style={{ cursor: 'pointer' }}
           >
-            {/* Intersection Hub Base */}
-            <circle cx={node.x} cy={node.y} r="14" fill="#1e293b" stroke="#64748b" strokeWidth="2" />
+            <circle cx={node.x} cy={node.y} r="16" fill="#050b14" stroke="#00f0ff" strokeWidth="2.5" filter="url(#neonCyanGlow)" />
             <circle cx={node.x} cy={node.y} r="5" fill="#38bdf8" />
-
-            {/* Junction ID Label */}
             <text
               x={node.x}
-              y={node.y - 18}
-              fill="#f8fafc"
-              fontSize="10"
-              fontWeight="800"
+              y={node.y - 20}
+              fill="#00f0ff"
+              fontSize="11"
+              fontWeight="900"
               textAnchor="middle"
-              filter="url(#vehicleShadow)"
+              fontFamily="JetBrains Mono"
+              filter="url(#neonCyanGlow)"
             >
               {node.id}
             </text>
           </g>
         ))}
 
-        {/* --- 🟢 START and 🔴 DESTINATION Markers --- */}
+        {/* --- 🟢 START and 🔴 DESTINATION Holographic Beacons --- */}
         {cityLayout.nodes.length >= 2 && (
           <>
             {/* 🟢 START Beacon */}
             <g transform={`translate(${cityLayout.nodes[0].x}, ${cityLayout.nodes[0].y})`}>
-              <circle cx="0" cy="0" r="24" fill="rgba(16, 185, 129, 0.25)" className="animate-ping" />
-              <circle cx="0" cy="0" r="16" fill="#10b981" stroke="#ffffff" strokeWidth="2.5" filter="url(#vehicleShadow)" />
-              <text x="0" y="28" fill="#34d399" fontSize="11" fontWeight="800" textAnchor="middle" filter="url(#vehicleShadow)">
+              <circle cx="0" cy="0" r="30" fill="rgba(16, 185, 129, 0.25)" className="animate-ping" />
+              <circle cx="0" cy="0" r="18" fill="#10b981" stroke="#ffffff" strokeWidth="3" filter="url(#neonCyanGlow)" />
+              <text x="0" y="34" fill="#34d399" fontSize="12" fontWeight="900" textAnchor="middle" fontFamily="Orbitron">
                 🟢 START
               </text>
             </g>
 
             {/* 🔴 DESTINATION Beacon */}
             <g transform={`translate(${cityLayout.nodes[cityLayout.nodes.length - 1].x}, ${cityLayout.nodes[cityLayout.nodes.length - 1].y})`}>
-              <circle cx="0" cy="0" r="24" fill="rgba(244, 63, 94, 0.25)" className="animate-ping" />
-              <circle cx="0" cy="0" r="16" fill="#f43f5e" stroke="#ffffff" strokeWidth="2.5" filter="url(#vehicleShadow)" />
-              <text x="0" y="28" fill="#fb7185" fontSize="11" fontWeight="800" textAnchor="middle" filter="url(#vehicleShadow)">
+              <circle cx="0" cy="0" r="30" fill="rgba(244, 63, 94, 0.25)" className="animate-ping" />
+              <circle cx="0" cy="0" r="18" fill="#f43f5e" stroke="#ffffff" strokeWidth="3" filter="url(#neonOrangeGlow)" />
+              <text x="0" y="34" fill="#ff6b00" fontSize="12" fontWeight="900" textAnchor="middle" fontFamily="Orbitron">
                 🏁 DESTINATION
               </text>
             </g>
           </>
         )}
 
-        {/* --- Vehicles on Map --- */}
+        {/* --- Dynamic Vehicles on Holographic Grid --- */}
         {renderedVehicles.map((veh) => (
           <g
             key={veh.id}
@@ -520,60 +557,59 @@ export default function CitySimulationMap({
               });
             }}
             style={{ cursor: 'pointer' }}
-            filter="url(#vehicleShadow)"
           >
-            <circle cx="0" cy="0" r="10" fill="#0284c7" stroke="#ffffff" strokeWidth="1.5" />
-            <text x="0" y="3.5" fill="#ffffff" fontSize="7" fontWeight="bold" textAnchor="middle">
+            <circle cx="0" cy="0" r="12" fill="#00f0ff" stroke="#ffffff" strokeWidth="2" filter="url(#neonCyanGlow)" />
+            <text x="0" y="4" fill="#030712" fontSize="9" fontWeight="900" textAnchor="middle">
               {veh.type === 'Bikes' ? '🏍️' : veh.type === 'Lorries' ? '🚚' : veh.type === 'Vans' ? '🚐' : veh.type === 'Scooters' ? '🛵' : '🚗'}
             </text>
           </g>
         ))}
       </svg>
 
-      {/* 2. Floating Minimal Navigation & Action Controls */}
+      {/* 2. Floating Minimal Navigation Controls */}
       <div
         className="map-control-btn"
         style={{
           position: 'absolute',
-          top: 18,
-          right: 18,
+          top: 20,
+          right: 20,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 10,
           zIndex: 20,
         }}
       >
         <button
           onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))}
           className="btn btn-secondary"
-          style={{ padding: 8, borderRadius: 8, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)' }}
+          style={{ padding: 10, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }}
           title="Zoom In"
         >
-          <ZoomIn size={16} />
+          <ZoomIn size={18} color="#00f0ff" />
         </button>
         <button
           onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))}
           className="btn btn-secondary"
-          style={{ padding: 8, borderRadius: 8, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)' }}
+          style={{ padding: 10, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }}
           title="Zoom Out"
         >
-          <ZoomOut size={16} />
+          <ZoomOut size={18} color="#00f0ff" />
         </button>
         <button
           onClick={handleResetView}
           className="btn btn-secondary"
-          style={{ padding: 8, borderRadius: 8, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)' }}
+          style={{ padding: 10, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }}
           title="Reset View"
         >
-          <RotateCcw size={16} />
+          <RotateCcw size={18} color="#00f0ff" />
         </button>
         <button
           onClick={toggleFullscreen}
           className="btn btn-secondary"
-          style={{ padding: 8, borderRadius: 8, background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)' }}
+          style={{ padding: 10, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }}
           title="Toggle Fullscreen"
         >
-          {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+          {isFullscreen ? <Minimize size={18} color="#00f0ff" /> : <Maximize size={18} color="#00f0ff" />}
         </button>
       </div>
 
@@ -582,48 +618,49 @@ export default function CitySimulationMap({
         className="map-control-btn"
         style={{
           position: 'absolute',
-          bottom: 20,
+          bottom: 24,
           left: '50%',
           transform: 'translateX(-50%)',
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
-          background: 'rgba(15, 23, 42, 0.92)',
-          backdropFilter: 'blur(12px)',
-          padding: '8px 16px',
-          borderRadius: 30,
-          border: '1px solid rgba(56, 189, 248, 0.3)',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+          gap: 14,
+          background: 'rgba(5, 11, 20, 0.95)',
+          backdropFilter: 'blur(20px)',
+          padding: '10px 20px',
+          borderRadius: 35,
+          border: '1px solid #00f0ff',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.8), 0 0 25px rgba(0, 240, 255, 0.35)',
           zIndex: 20,
         }}
       >
         <button
           onClick={onReconfigure}
           className="btn btn-secondary"
-          style={{ padding: '8px 16px', borderRadius: 20, fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ padding: '10px 20px', borderRadius: 25, fontSize: '0.86rem', display: 'flex', alignItems: 'center', gap: 8 }}
         >
-          <Sliders size={14} /> ⚙️ Reconfigure Scenario
+          <Sliders size={15} /> ⚙️ RECONFIGURE SCENARIO
         </button>
 
         <button
           onClick={onRunOptimization}
           disabled={isLoading}
           style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            color: '#ffffff',
+            background: 'linear-gradient(135deg, #00f0ff 0%, #0284c7 100%)',
+            color: '#030712',
             border: 'none',
-            borderRadius: 20,
-            padding: '8px 20px',
-            fontSize: '0.88rem',
-            fontWeight: 700,
+            borderRadius: 25,
+            padding: '10px 24px',
+            fontSize: '0.92rem',
+            fontWeight: 900,
             cursor: isLoading ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+            boxShadow: '0 0 20px rgba(0, 240, 255, 0.6)',
+            letterSpacing: '0.04em',
           }}
         >
-          <Zap size={15} />
+          <Zap size={16} color="#030712" />
           {isLoading ? 'OPTIMIZING SWARM...' : '🚀 RUN QUANTUM OPTIMIZATION'}
         </button>
       </div>
@@ -636,43 +673,43 @@ export default function CitySimulationMap({
             position: 'absolute',
             top: 24,
             left: 24,
-            background: 'rgba(8, 12, 22, 0.95)',
-            backdropFilter: 'blur(10px)',
-            border: '1px solid rgba(56, 189, 248, 0.4)',
-            borderRadius: 12,
-            padding: '16px 20px',
-            boxShadow: '0 12px 30px rgba(0,0,0,0.7)',
-            maxWidth: 280,
+            background: 'rgba(5, 11, 20, 0.96)',
+            backdropFilter: 'blur(16px)',
+            border: '1px solid #00f0ff',
+            borderRadius: 14,
+            padding: '18px 22px',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.9), 0 0 25px rgba(0, 240, 255, 0.3)',
+            maxWidth: 300,
             zIndex: 30,
             color: '#f8fafc',
-            fontSize: '0.84rem',
+            fontSize: '0.86rem',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <strong style={{ color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              {selectedElement.type === 'road' ? `Road ${selectedElement.data.source} ➔ ${selectedElement.data.target}` : selectedElement.type === 'node' ? `Junction ${selectedElement.data.id}` : `Vehicle ${selectedElement.data.id}`}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <strong className="font-orbitron" style={{ color: '#00f0ff', letterSpacing: '0.05em' }}>
+              {selectedElement.type === 'road' ? `ROAD ${selectedElement.data.source} ➔ ${selectedElement.data.target}` : selectedElement.type === 'node' ? `JUNCTION ${selectedElement.data.id}` : `VEHICLE ${selectedElement.data.id}`}
             </strong>
             <button
               onClick={() => setSelectedElement(null)}
               style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
             >
-              <X size={14} />
+              <X size={15} />
             </button>
           </div>
 
           {selectedElement.type === 'road' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: '#cbd5e1' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, color: '#cbd5e1' }}>
               <div>Length: <strong>{selectedElement.data.distance_km} km</strong></div>
               <div>Speed Limit: <strong>{selectedElement.data.free_flow_speed_kmph} km/h</strong></div>
               <div>Capacity: <strong>{selectedElement.data.capacity_vehicles} veh</strong></div>
-              <div>Status: <span className={`badge ${selectedElement.data.status === 'OPEN' ? 'badge-emerald' : 'badge-rose'}`}>{selectedElement.data.status}</span></div>
+              <div>Status: <span className={`badge ${selectedElement.data.status === 'OPEN' ? 'badge-cyan' : 'badge-rose'}`}>{selectedElement.data.status}</span></div>
             </div>
           )}
 
           {selectedElement.type === 'node' && (
             <div style={{ color: '#cbd5e1' }}>
               <div>Intersection Coordinate: <strong>({selectedElement.data.x}, {selectedElement.data.y})</strong></div>
-              <div style={{ marginTop: 4 }}>Signal Status: <span className="badge badge-emerald">ACTIVE</span></div>
+              <div style={{ marginTop: 6 }}>Signal Telemetry: <span className="badge badge-emerald">ACTIVE</span></div>
             </div>
           )}
 
@@ -680,7 +717,7 @@ export default function CitySimulationMap({
             <div style={{ color: '#cbd5e1' }}>
               <div>Vehicle Type: <strong>{selectedElement.data.type}</strong></div>
               <div>Current Corridor: <strong>Road {selectedElement.data.roadId}</strong></div>
-              <div>Status: <span className="badge badge-cyan">EN ROUTE</span></div>
+              <div style={{ marginTop: 6 }}>Telemetry: <span className="badge badge-cyan">EN ROUTE</span></div>
             </div>
           )}
         </div>
