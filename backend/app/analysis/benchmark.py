@@ -1,8 +1,8 @@
 """
-benchmark.py — Benchmarking suite comparing Classical Baseline (Dijkstra/A*) vs QPSO (SIH26137).
+benchmark.py — Benchmarking suite comparing Classical Baseline vs QPSO with Physics & Emissions (SIH26137).
 
 Produces rigorous, non-fabricated metrics:
-    - Distance, Time, Congestion, Penalties, and Objective Fitness
+    - Distance, Travel Time, Free-Flow Time, Congestion Delay, Fuel Consumption, CO2 Emissions, LOS
     - Percentage improvements: ((baseline - qpso) / baseline) * 100
     - Multi-seed batch repeatability analysis with full statistical distributions
     - Multi-stage scalability analysis (Stages 1 through 4)
@@ -54,7 +54,12 @@ def _solution_summary(solution: FullSolution, runtime_sec: float = 0.0, method_n
         "method": method_name,
         "distance_total_km": round(solution.totals.distance_total, 2),
         "time_total_min": round(solution.totals.time_total, 2),
+        "free_flow_time_total_min": round(solution.totals.free_flow_time_total, 2),
+        "delay_total_min": round(solution.totals.delay_total, 2),
         "congestion_total": round(solution.totals.congestion_total, 2),
+        "fuel_total_liters": round(solution.totals.fuel_total, 3),
+        "co2_total_kg": round(solution.totals.co2_total, 3),
+        "avg_los": solution.totals.avg_los,
         "penalty_total": round(solution.totals.penalty_total, 2),
         "fitness": round(solution.fitness, 4),
         "avg_time_min": round(solution.totals.time_total / max(1, num_veh), 2),
@@ -71,8 +76,6 @@ def calc_improvement(b_val: float, q_val: float) -> float:
     """
     Computes percentage improvement:
         improvement = ((baseline - qpso) / baseline) * 100
-    Positive percentage means QPSO achieved a lower (better) cost.
-    Negative percentage means QPSO had a higher cost (honest reporting).
     """
     if abs(b_val) < 1e-9:
         return 0.0
@@ -176,10 +179,19 @@ def run_benchmark(
         "congestion_improvement_pct": calc_improvement(
             baseline_summary["congestion_total"], qpso_summary["congestion_total"]
         ),
+        "fuel_improvement_pct": calc_improvement(
+            baseline_summary["fuel_total_liters"], qpso_summary["fuel_total_liters"]
+        ),
+        "co2_improvement_pct": calc_improvement(
+            baseline_summary["co2_total_kg"], qpso_summary["co2_total_kg"]
+        ),
+        "delay_improvement_pct": calc_improvement(
+            baseline_summary["delay_total_min"], qpso_summary["delay_total_min"]
+        ),
         "fitness_improvement_pct": calc_improvement(
             baseline_summary["fitness"], qpso_summary["fitness"]
         ),
-        # Deltas for UI badges (negative is better for cost values)
+        # Deltas for UI badges
         "time_delta_pct": round(
             ((qpso_summary["time_total_min"] - baseline_summary["time_total_min"]) / max(0.1, baseline_summary["time_total_min"])) * 100, 2
         ),
@@ -204,7 +216,12 @@ def run_benchmark(
                 "path": vs.path,
                 "distance_km": round(vs.metrics.distance_km, 2),
                 "time_min": round(vs.metrics.time_min, 2),
+                "delay_min": round(vs.metrics.delay_min, 2),
                 "congestion": round(vs.metrics.congestion, 2),
+                "fuel_liters": round(vs.metrics.fuel_liters, 3),
+                "co2_kg": round(vs.metrics.co2_kg, 3),
+                "level_of_service": vs.metrics.level_of_service,
+                "avg_speed_kmph": vs.metrics.avg_speed_kmph,
                 "valid": vs.constraint.valid,
                 "violations": vs.constraint.violations,
             }
@@ -218,7 +235,12 @@ def run_benchmark(
                 "path": vs.path,
                 "distance_km": round(vs.metrics.distance_km, 2),
                 "time_min": round(vs.metrics.time_min, 2),
+                "delay_min": round(vs.metrics.delay_min, 2),
                 "congestion": round(vs.metrics.congestion, 2),
+                "fuel_liters": round(vs.metrics.fuel_liters, 3),
+                "co2_kg": round(vs.metrics.co2_kg, 3),
+                "level_of_service": vs.metrics.level_of_service,
+                "avg_speed_kmph": vs.metrics.avg_speed_kmph,
                 "valid": vs.constraint.valid,
                 "violations": vs.constraint.violations,
             }
@@ -238,81 +260,60 @@ def run_benchmark(
                     qpso_result.diversity_history,
                 )
             ):
-                writer.writerow([i, b_fit, m_fit, div])
+                writer.writerow([i + 1, b_fit, m_fit, div])
 
-        with open(out / "routes.json", "w") as f:
-            json.dump(routes_payload, f, indent=2)
+        with open(out / "summary_metrics.json", "w") as f:
+            json.dump(
+                {
+                    "baseline": baseline_summary,
+                    "qpso": qpso_summary,
+                    "comparison": comparison_payload,
+                },
+                f,
+                indent=2,
+            )
     except Exception:
         pass
 
-    benchmark_payload = {
-        "scenario": {
-            "nodes": len(network.nodes),
-            "roads": len(network.roads),
-            "vehicles": len(vehicles),
-        },
-        "weights": w_dict,
-        "calibration_bounds": {
-            "time": {"min": bounds.time.min_val, "max": bounds.time.max_val},
-            "distance": {"min": bounds.distance.min_val, "max": bounds.distance.max_val},
-            "congestion": {"min": bounds.congestion.min_val, "max": bounds.congestion.max_val},
-        },
+    return {
         "baseline": baseline_summary,
         "qpso": qpso_summary,
         "comparison": comparison_payload,
-        "convergence": qpso_result.convergence,
-        "mean_convergence": qpso_result.mean_convergence,
-        "diversity_history": qpso_result.diversity_history,
         "routes": routes_payload,
-    }
-
-    try:
-        with open(out / "benchmark.json", "w") as f:
-            json.dump(benchmark_payload, f, indent=2)
-    except Exception:
-        pass
-
-    return benchmark_payload
-
-
-def _calc_stats(values: List[float]) -> dict:
-    if not values:
-        return {"mean": 0.0, "median": 0.0, "std": 0.0, "min": 0.0, "max": 0.0}
-    return {
-        "mean": round(statistics.mean(values), 2),
-        "median": round(statistics.median(values), 2),
-        "std": round(statistics.stdev(values) if len(values) > 1 else 0.0, 2),
-        "min": round(min(values), 2),
-        "max": round(max(values), 2),
+        "convergence": qpso_result.convergence,
+        "diversity": qpso_result.diversity_history,
     }
 
 
-def run_batch_seeds(
-    network_fn: Callable[[], RoadNetwork],
-    fleet_fn: Callable[[RoadNetwork, int], List[Vehicle]],
-    seeds: List[int] = [42, 123, 456, 789, 1000],
+def run_batch_benchmark(
+    seeds: List[int],
+    network: Optional[RoadNetwork] = None,
+    traffic_model: Optional[TrafficModel] = None,
+    vehicles: Optional[List[Vehicle]] = None,
+    network_fn: Optional[Callable[[], RoadNetwork]] = None,
+    fleet_fn: Optional[Callable[[RoadNetwork, int], List[Vehicle]]] = None,
+    steps_per_vehicle: int = 12,
     num_particles: int = 20,
     num_iterations: int = 40,
-    steps_per_vehicle: int = 12,
     weights: Optional[dict] = None,
+    baseline_method: str = "dijkstra",
 ) -> dict:
     """
-    Executes multi-seed statistical repeatability experiments, reporting full
-    statistical distributions (mean, median, std_dev, min, max) without fabricated data.
+    Runs multi-seed benchmarking across multiple independent runs
+    and computes full statistical distribution metrics (mean, std dev, range).
     """
     runs = []
-    time_imps = []
-    dist_imps = []
-    cong_imps = []
-    fit_imps = []
-    qpso_fitnesses = []
-    runtimes = []
 
     for s in seeds:
-        net = network_fn()
-        tm = TrafficModel(seed=s)
+        net = network_fn() if network_fn else network
+        veh = fleet_fn(net, s) if fleet_fn else vehicles
+        
+        weather = traffic_model.weather if traffic_model else "Normal"
+        surf = traffic_model.surface_good_pct if traffic_model else 60.0
+
+        tm = TrafficModel(seed=s, weather=weather, surface_good_pct=surf)
         tm.generate(net)
-        veh = fleet_fn(net, s)
+
         res = run_benchmark(
             network=net,
             traffic_model=tm,
@@ -322,110 +323,118 @@ def run_batch_seeds(
             num_iterations=num_iterations,
             weights=weights,
             seed=s,
+            baseline_method=baseline_method,
         )
-        t_imp = res["comparison"]["time_improvement_pct"]
-        d_imp = res["comparison"]["distance_improvement_pct"]
-        c_imp = res["comparison"]["congestion_improvement_pct"]
-        f_imp = res["comparison"]["fitness_improvement_pct"]
-        fit = res["qpso"]["fitness"]
-        rt = res["qpso"]["runtime_sec"]
 
-        time_imps.append(t_imp)
-        dist_imps.append(d_imp)
-        cong_imps.append(c_imp)
-        fit_imps.append(f_imp)
-        qpso_fitnesses.append(fit)
-        runtimes.append(rt)
+        runs.append(
+            {
+                "seed": s,
+                "baseline_time": res["baseline"]["time_total_min"],
+                "qpso_time": res["qpso"]["time_total_min"],
+                "time_imp_pct": res["comparison"]["time_improvement_pct"],
+                "dist_imp_pct": res["comparison"]["distance_improvement_pct"],
+                "congestion_imp_pct": res["comparison"]["congestion_improvement_pct"],
+                "fuel_imp_pct": res["comparison"]["fuel_improvement_pct"],
+                "co2_imp_pct": res["comparison"]["co2_improvement_pct"],
+                "qpso_fitness": res["qpso"]["fitness"],
+                "runtime_sec": res["qpso"]["runtime_sec"],
+            }
+        )
 
-        runs.append({
-            "seed": s,
-            "baseline_time": res["baseline"]["time_total_min"],
-            "qpso_time": res["qpso"]["time_total_min"],
-            "time_imp_pct": t_imp,
-            "baseline_dist": res["baseline"]["distance_total_km"],
-            "qpso_dist": res["qpso"]["distance_total_km"],
-            "dist_imp_pct": d_imp,
-            "baseline_congestion": res["baseline"]["congestion_total"],
-            "qpso_congestion": res["qpso"]["congestion_total"],
-            "congestion_imp_pct": c_imp,
-            "baseline_fitness": res["baseline"]["fitness"],
-            "qpso_fitness": fit,
-            "fitness_imp_pct": f_imp,
-            "runtime_sec": rt,
-        })
+    def stats_for(key: str) -> dict:
+        vals = [r[key] for r in runs]
+        return {
+            "mean": round(statistics.mean(vals), 2),
+            "median": round(statistics.median(vals), 2),
+            "std": round(statistics.stdev(vals), 2) if len(vals) > 1 else 0.0,
+            "min": round(min(vals), 2),
+            "max": round(max(vals), 2),
+        }
 
     return {
-        "seeds_tested": seeds,
+        "seeds": seeds,
         "runs": runs,
         "statistics": {
-            "time_improvement_pct": _calc_stats(time_imps),
-            "distance_improvement_pct": _calc_stats(dist_imps),
-            "congestion_improvement_pct": _calc_stats(cong_imps),
-            "fitness_improvement_pct": _calc_stats(fit_imps),
-            "qpso_fitness": _calc_stats(qpso_fitnesses),
-            "runtime_sec": _calc_stats(runtimes),
+            "time_improvement_pct": stats_for("time_imp_pct"),
+            "distance_improvement_pct": stats_for("dist_imp_pct"),
+            "congestion_improvement_pct": stats_for("congestion_imp_pct"),
+            "fuel_improvement_pct": stats_for("fuel_imp_pct"),
+            "co2_improvement_pct": stats_for("co2_imp_pct"),
+            "qpso_fitness": stats_for("qpso_fitness"),
+            "runtime_sec": stats_for("runtime_sec"),
         },
         "summary": {
-            "avg_time_improvement_pct": round(statistics.mean(time_imps), 2),
-            "avg_distance_improvement_pct": round(statistics.mean(dist_imps), 2),
-            "avg_congestion_improvement_pct": round(statistics.mean(cong_imps), 2),
-            "avg_fitness": round(statistics.mean(qpso_fitnesses), 4),
-            "avg_runtime_sec": round(statistics.mean(runtimes), 4),
+            "avg_time_improvement_pct": round(sum(r["time_imp_pct"] for r in runs) / max(1, len(runs)), 2),
+            "avg_distance_improvement_pct": round(sum(r["dist_imp_pct"] for r in runs) / max(1, len(runs)), 2),
+            "avg_congestion_improvement_pct": round(sum(r["congestion_imp_pct"] for r in runs) / max(1, len(runs)), 2),
+            "avg_fuel_improvement_pct": round(sum(r["fuel_imp_pct"] for r in runs) / max(1, len(runs)), 2),
+            "avg_co2_improvement_pct": round(sum(r["co2_imp_pct"] for r in runs) / max(1, len(runs)), 2),
+            "avg_fitness": round(sum(r["qpso_fitness"] for r in runs) / max(1, len(runs)), 4),
+            "avg_runtime_sec": round(sum(r["runtime_sec"] for r in runs) / max(1, len(runs)), 2),
         },
     }
 
 
-def run_scalability_experiment(seed: int = 42) -> dict:
+def run_scalability_benchmark(seed: int = 42) -> dict:
     """
-    Executes standard 4-stage scalability benchmark:
-        Stage 1: 5 vehicles, 9 nodes (Demo)
-        Stage 2: 10 vehicles, 16 nodes (Grid)
-        Stage 3: 25 vehicles, 30 nodes (Metropolitan)
-        Stage 4: 50 vehicles, 30 nodes (Metropolitan stress test)
+    Executes a structured 4-stage urban scalability benchmark from small demo to metropolitan scale.
     """
     stages_config = [
-        {"stage": 1, "name": "Stage 1: Demo Scale", "net_fn": build_demo_network, "veh_count": 5, "steps": 12, "particles": 15, "iterations": 20},
-        {"stage": 2, "name": "Stage 2: Urban Grid Scale", "net_fn": build_grid_network, "veh_count": 10, "steps": 16, "particles": 15, "iterations": 20},
-        {"stage": 3, "name": "Stage 3: Metropolitan Scale", "net_fn": build_metropolitan_network, "veh_count": 25, "steps": 22, "particles": 15, "iterations": 25},
-        {"stage": 4, "name": "Stage 4: High-Density Fleet Scale", "net_fn": build_metropolitan_network, "veh_count": 50, "steps": 24, "particles": 20, "iterations": 25},
+        {"stage": 1, "name": "Stage 1 (Demo)", "preset": "demo", "vehicles": 5, "particles": 15, "iterations": 20},
+        {"stage": 2, "name": "Stage 2 (Grid)", "preset": "smart_grid", "vehicles": 10, "particles": 15, "iterations": 25},
+        {"stage": 3, "name": "Stage 3 (Metro 25)", "preset": "metropolitan", "vehicles": 25, "particles": 20, "iterations": 30},
+        {"stage": 4, "name": "Stage 4 (Dense 50)", "preset": "metropolitan", "vehicles": 50, "particles": 25, "iterations": 35},
     ]
 
     results = []
     for cfg in stages_config:
-        net = cfg["net_fn"]()
+        if cfg["preset"] == "demo":
+            net = build_demo_network()
+            veh = build_demo_vehicles()
+        elif cfg["preset"] == "smart_grid":
+            net = build_grid_network()
+            veh = build_fleet(cfg["vehicles"], net, seed=seed)
+        else:
+            net = build_metropolitan_network()
+            veh = build_fleet(cfg["vehicles"], net, seed=seed)
+
         tm = TrafficModel(seed=seed)
         tm.generate(net)
-        veh = build_fleet(cfg["veh_count"], net, seed=seed)
+
         res = run_benchmark(
             network=net,
             traffic_model=tm,
             vehicles=veh,
-            steps_per_vehicle=cfg["steps"],
+            steps_per_vehicle=4,
             num_particles=cfg["particles"],
             num_iterations=cfg["iterations"],
             seed=seed,
         )
-        results.append({
-            "stage": cfg["stage"],
-            "name": cfg["name"],
-            "nodes": len(net.nodes),
-            "roads": len(net.roads),
-            "vehicles": cfg["veh_count"],
-            "baseline_time_min": res["baseline"]["time_total_min"],
-            "qpso_time_min": res["qpso"]["time_total_min"],
-            "time_imp_pct": res["comparison"]["time_improvement_pct"],
-            "baseline_dist_km": res["baseline"]["distance_total_km"],
-            "qpso_dist_km": res["qpso"]["distance_total_km"],
-            "dist_imp_pct": res["comparison"]["distance_improvement_pct"],
-            "baseline_congestion": res["baseline"]["congestion_total"],
-            "qpso_congestion": res["qpso"]["congestion_total"],
-            "congestion_imp_pct": res["comparison"]["congestion_improvement_pct"],
-            "baseline_fitness": res["baseline"]["fitness"],
-            "qpso_fitness": res["qpso"]["fitness"],
-            "fitness_imp_pct": res["comparison"]["fitness_improvement_pct"],
-            "baseline_runtime_sec": res["baseline"]["runtime_sec"],
-            "qpso_runtime_sec": res["qpso"]["runtime_sec"],
-            "valid_routes_rate_pct": res["qpso"]["valid_rate_pct"],
-        })
 
-    return {"seed": seed, "stages": results}
+        results.append(
+            {
+                "stage": cfg["stage"],
+                "name": cfg["name"],
+                "nodes": len(net.nodes),
+                "roads": len(net.roads),
+                "vehicles": cfg["vehicles"],
+                "baseline_time_min": res["baseline"]["time_total_min"],
+                "qpso_time_min": res["qpso"]["time_total_min"],
+                "fuel_total_liters": res["qpso"]["fuel_total_liters"],
+                "co2_total_kg": res["qpso"]["co2_total_kg"],
+                "avg_los": res["qpso"]["avg_los"],
+                "time_imp_pct": res["comparison"]["time_improvement_pct"],
+                "qpso_runtime_sec": res["qpso"]["runtime_sec"],
+                "valid_routes_rate_pct": res["qpso"]["valid_rate_pct"],
+            }
+        )
+
+    return {
+        "seed": seed,
+        "stages": results,
+    }
+
+
+# Backward-compatible function aliases
+run_batch_seeds = run_batch_benchmark
+run_scalability_experiment = run_scalability_benchmark

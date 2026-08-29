@@ -1,86 +1,38 @@
 """
-decoder.py — Priority Random-Key Decoder & Route Repair for Route Planner (SIH26137).
+decoder.py — Priority Random-Key & Candidate Corridor Decoder for Route Planner (SIH26137).
 
 Translates continuous QPSO particle positions x in [0, 1]^D into valid graph paths
-with active Route Repair (cycle elimination, target-guided potential heuristic, 
-blocked edge bypass, and guaranteed destination completion).
+by mapping continuous quantum coordinates to diverse physical alternative corridors
+with active dynamic detour fallback.
 """
 
-import heapq
 import math
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
+from app.routing.k_paths import CorridorPool, dijkstra_shortest_path, yens_k_shortest_paths
 from app.simulation.graph import RoadNetwork, RoadStatus
 from app.simulation.traffic import TrafficModel
 
-
-def estimate_remaining_travel_time(
-    network: RoadNetwork, u: str, target: str, max_speed_kmph: float = 50.0
-) -> float:
-    """
-    Admissible spatial Euclidean heuristic estimating remaining travel time in minutes.
-    """
-    pos_u = network.node_positions.get(u)
-    pos_t = network.node_positions.get(target)
-    if not pos_u or not pos_t:
-        return 0.0
-    dx = pos_u[0] - pos_t[0]
-    dy = pos_u[1] - pos_t[1]
-    dist_km = math.sqrt(dx * dx + dy * dy) * 0.05
-    return (dist_km / max(1.0, max_speed_kmph)) * 60.0
+_CORRIDOR_CACHE: Dict[Tuple[int, str, str], List[List[str]]] = {}
 
 
-def dijkstra_detour(
+def clear_corridor_cache() -> None:
+    _CORRIDOR_CACHE.clear()
+
+
+def get_cached_corridors(
     network: RoadNetwork,
-    traffic_model: TrafficModel,
-    source: str,
+    traffic_model: Optional[TrafficModel],
+    origin: str,
     destination: str,
-    avoid_nodes: Optional[Set[str]] = None,
-) -> Optional[List[str]]:
-    """
-    Finds a valid detour path from source to destination traversing only OPEN edges.
-    """
-    distances: Dict[str, float] = {source: 0.0}
-    previous: Dict[str, str] = {}
-    visited = set()
-    heap = [(0.0, source)]
-    avoid = avoid_nodes or set()
-
-    while heap:
-        dist, node = heapq.heappop(heap)
-        if node in visited:
-            continue
-        visited.add(node)
-
-        if node == destination:
-            break
-
-        for road in network.adjacency.get(node, []):
-            if road.status != RoadStatus.OPEN:
-                continue
-            if road.target in avoid and road.target != destination:
-                continue
-
-            weight = traffic_model.actual_travel_time_min(
-                road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
-            )
-            new_dist = dist + weight
-            if new_dist < distances.get(road.target, float("inf")):
-                distances[road.target] = new_dist
-                previous[road.target] = node
-                heapq.heappush(heap, (new_dist, road.target))
-
-    if destination not in distances:
-        # If avoid_nodes prevented reaching destination, fallback without avoid constraint
-        if avoid:
-            return dijkstra_detour(network, traffic_model, source, destination, avoid_nodes=None)
-        return None
-
-    path = [destination]
-    while path[-1] != source:
-        path.append(previous[path[-1]])
-    path.reverse()
-    return path
+    K: int = 5,
+) -> List[List[str]]:
+    key = (id(network), origin, destination)
+    if key not in _CORRIDOR_CACHE:
+        _CORRIDOR_CACHE[key] = yens_k_shortest_paths(
+            network, traffic_model, origin, destination, K=K
+        )
+    return _CORRIDOR_CACHE[key]
 
 
 def repair_path_cycles(path: List[str]) -> List[str]:
@@ -96,7 +48,6 @@ def repair_path_cycles(path: List[str]) -> List[str]:
 
     for node in path:
         if node in seen_indices:
-            # Loop detected: truncate path back to previous visit of node
             cut_idx = seen_indices[node]
             repaired = repaired[: cut_idx + 1]
             seen_indices = {n: i for i, n in enumerate(repaired)}
@@ -113,24 +64,16 @@ def repair_path_complete(
     path: List[str],
     destination: str,
 ) -> List[str]:
-    """
-    Applies active cycle repair and guaranteed destination completion.
-    """
-    # 1. Cycle elimination
+    """Applies active cycle repair and guaranteed destination completion."""
     path = repair_path_cycles(path)
-
-    # 2. Destination completion if step budget ended before destination
     if not path or path[-1] != destination:
         curr = path[-1] if path else destination
-        rest = dijkstra_detour(
-            network, traffic_model, curr, destination, avoid_nodes=set(path[:-1])
-        )
+        rest = dijkstra_shortest_path(network, traffic_model, curr, destination)
         if rest and len(rest) > 1:
             path = path + rest[1:]
         elif not path:
             path = [curr]
-
-    return path
+    return repair_path_cycles(path)
 
 
 def decode_vehicle_route(
@@ -139,58 +82,39 @@ def decode_vehicle_route(
     origin: str,
     destination: str,
     latent_vector: List[float],
+    corridor_pool: Optional[CorridorPool] = None,
 ) -> List[str]:
     """
-    Decodes a vehicle's latent vector into a valid route with target-guided ranking
-    and robust destination repair.
+    Decodes a continuous latent vector into a valid route across candidate corridors.
     """
-    path = [origin]
-    visited: Set[str] = {origin}
-    current = origin
+    if origin == destination:
+        return [origin]
 
-    for step in range(len(latent_vector)):
-        if current == destination:
+    candidates = get_cached_corridors(network, traffic_model, origin, destination, K=5)
+
+    if not candidates:
+        fallback = dijkstra_shortest_path(network, traffic_model, origin, destination)
+        return fallback or ([origin, destination] if network.road_exists(origin, destination) else [origin])
+
+    # Map primary continuous latent coordinate to candidate corridor index
+    latent_val = max(0.0, min(0.999999, latent_vector[0] if latent_vector else 0.0))
+    idx = int(math.floor(latent_val * len(candidates)))
+    idx = max(0, min(idx, len(candidates) - 1))
+    chosen_path = candidates[idx]
+
+    # Verify that all edges in chosen path are currently OPEN
+    is_valid = True
+    for u, v in zip(chosen_path[:-1], chosen_path[1:]):
+        if not network.road_exists(u, v) or network.get_road(u, v).status != RoadStatus.OPEN:
+            is_valid = False
             break
 
-        # Filter only OPEN roads
-        neighbors = [
-            road.target
-            for road in network.adjacency.get(current, [])
-            if road.status == RoadStatus.OPEN
-        ]
-        if not neighbors:
-            # Dead end — break to destination completion repair
-            break
+    if is_valid:
+        return chosen_path
 
-        # Discourage immediate cycles: prefer unvisited nodes
-        unvisited = [n for n in neighbors if n not in visited]
-        candidates = unvisited if unvisited else neighbors
-
-        # Rank candidates by total estimated travel time to destination
-        def candidate_score(n: str) -> float:
-            road = network.get_road(current, n)
-            edge_time = traffic_model.actual_travel_time_min(
-                current,
-                n,
-                road.free_flow_time_min,
-                road.capacity_vehicles,
-            )
-            rem_time = estimate_remaining_travel_time(network, n, destination)
-            return edge_time + rem_time
-
-        candidates.sort(key=candidate_score)
-
-        latent_val = max(0.0, min(0.999999, latent_vector[step]))
-        idx = int(math.floor(latent_val * len(candidates)))
-        idx = max(0, min(idx, len(candidates) - 1))
-
-        next_node = candidates[idx]
-        path.append(next_node)
-        visited.add(next_node)
-        current = next_node
-
-    # Active repair: remove loops and guarantee reaching destination
-    return repair_path_complete(network, traffic_model, path, destination)
+    # If any edge was blocked (e.g. dynamic incident), compute detour
+    detour = dijkstra_shortest_path(network, traffic_model, origin, destination)
+    return detour or chosen_path
 
 
 def decode_all_vehicles(
@@ -198,7 +122,7 @@ def decode_all_vehicles(
     traffic_model: TrafficModel,
     vehicles: List,
     particle: List[float],
-    steps_per_vehicle: int,
+    steps_per_vehicle: int = 4,
 ) -> List[List[str]]:
     """
     Decodes the full continuous particle into discrete routes for all vehicles.
@@ -207,9 +131,13 @@ def decode_all_vehicles(
     for i, vehicle in enumerate(vehicles):
         start = i * steps_per_vehicle
         end = start + steps_per_vehicle
-        latent_slice = particle[start:end]
+        latent_slice = particle[start:end] if particle else [0.0]
         route = decode_vehicle_route(
-            network, traffic_model, vehicle.origin, vehicle.destination, latent_slice
+            network,
+            traffic_model,
+            vehicle.origin,
+            vehicle.destination,
+            latent_slice,
         )
         routes.append(route)
     return routes

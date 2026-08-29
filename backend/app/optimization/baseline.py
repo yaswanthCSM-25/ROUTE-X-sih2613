@@ -1,7 +1,10 @@
 """
-baseline.py — Classical routing algorithms (Dijkstra and A*) for Route Planner (SIH26137).
+baseline.py — Classical & Benchmark Routing Algorithms for Route Planner (SIH26137).
 
-Serves as the reference benchmark to measure QPSO optimization against.
+Provides rigorous benchmark algorithms:
+1. "dijkstra": Wardrop's 1st Principle User Equilibrium (Greedy shortest travel time)
+2. "astar": Euclidean-directed A* routing
+3. "marginal_cost": Wardrop's 2nd Principle System Optimum (Marginal Social Cost Routing MC_e)
 """
 
 import heapq
@@ -23,17 +26,23 @@ def euclidean_heuristic(network: RoadNetwork, u: str, v: str, max_speed_kmph: fl
         return 0.0
     dx = pos_u[0] - pos_v[0]
     dy = pos_u[1] - pos_v[1]
-    dist_est = math.sqrt(dx * dx + dy * dy) * 0.05  # Scale canvas units to approx km
+    dist_est = math.sqrt(dx * dx + dy * dy) * 0.05
     return (dist_est / max_speed_kmph) * 60.0
 
 
 def dijkstra_shortest_path(
-    network: RoadNetwork, traffic_model: TrafficModel, origin: str, destination: str
+    network: RoadNetwork,
+    traffic_model: TrafficModel,
+    origin: str,
+    destination: str,
+    use_marginal_cost: bool = False,
 ) -> Optional[List[str]]:
     """
-    Classical Dijkstra algorithm over the road network with BPR travel time weights.
-    Traverses only OPEN roads. Returns None if unreachable.
+    Classical Dijkstra algorithm over the road network.
     """
+    if origin == destination:
+        return [origin]
+
     distances: Dict[str, float] = {origin: 0.0}
     previous: Dict[str, str] = {}
     visited = set()
@@ -51,9 +60,16 @@ def dijkstra_shortest_path(
         for road in network.adjacency.get(node, []):
             if road.status != RoadStatus.OPEN:
                 continue
-            weight = traffic_model.actual_travel_time_min(
-                road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
-            )
+
+            if use_marginal_cost:
+                weight = traffic_model.marginal_social_cost_min(
+                    road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
+                )
+            else:
+                weight = traffic_model.actual_travel_time_min(
+                    road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
+                )
+
             new_dist = dist + weight
             if new_dist < distances.get(road.target, float("inf")):
                 distances[road.target] = new_dist
@@ -71,11 +87,18 @@ def dijkstra_shortest_path(
 
 
 def astar_shortest_path(
-    network: RoadNetwork, traffic_model: TrafficModel, origin: str, destination: str
+    network: RoadNetwork,
+    traffic_model: TrafficModel,
+    origin: str,
+    destination: str,
+    use_marginal_cost: bool = False,
 ) -> Optional[List[str]]:
     """
-    Classical A* search algorithm using spatial euclidean heuristic.
+    A* search algorithm using spatial euclidean heuristic.
     """
+    if origin == destination:
+        return [origin]
+
     g_score: Dict[str, float] = {origin: 0.0}
     f_score: Dict[str, float] = {origin: euclidean_heuristic(network, origin, destination)}
     previous: Dict[str, str] = {}
@@ -94,10 +117,17 @@ def astar_shortest_path(
         for road in network.adjacency.get(current, []):
             if road.status != RoadStatus.OPEN:
                 continue
-            edge_time = traffic_model.actual_travel_time_min(
-                road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
-            )
-            tentative_g = g_score[current] + edge_time
+
+            if use_marginal_cost:
+                edge_cost = traffic_model.marginal_social_cost_min(
+                    road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
+                )
+            else:
+                edge_cost = traffic_model.actual_travel_time_min(
+                    road.source, road.target, road.free_flow_time_min, road.capacity_vehicles
+                )
+
+            tentative_g = g_score[current] + edge_cost
             if tentative_g < g_score.get(road.target, float("inf")):
                 previous[road.target] = current
                 g_score[road.target] = tentative_g
@@ -131,22 +161,33 @@ def run_baseline(
     method: str = "dijkstra",
 ) -> List[BaselineResult]:
     """
-    Runs classical routing for all vehicles and evaluates baseline metrics.
+    Runs reference routing for all vehicles.
     """
-    routing_fn = astar_shortest_path if method.lower() == "astar" else dijkstra_shortest_path
+    method_lower = method.lower()
+    use_marginal = "marginal" in method_lower or "so" in method_lower
+    use_astar = "astar" in method_lower
+
     raw_paths = []
+    v_types = [v.vehicle_type if hasattr(v, "vehicle_type") else "Cars" for v in vehicles]
 
     for vehicle in vehicles:
-        path = routing_fn(network, traffic_model, vehicle.origin, vehicle.destination)
+        if use_astar:
+            path = astar_shortest_path(
+                network, traffic_model, vehicle.origin, vehicle.destination, use_marginal_cost=use_marginal
+            )
+        else:
+            path = dijkstra_shortest_path(
+                network, traffic_model, vehicle.origin, vehicle.destination, use_marginal_cost=use_marginal
+            )
         raw_paths.append(path)
 
-    # Update traffic model with baseline vehicle routing load
-    valid_paths = [p for p in raw_paths if p]
-    traffic_model.update_vehicle_loads(valid_paths)
+    # Dynamic multi-vehicle traffic load coupling with PCE weights
+    traffic_model.update_vehicle_loads([p for p in raw_paths if p], vehicle_types=v_types)
 
     results = []
     for vehicle, path in zip(vehicles, raw_paths):
-        metrics = evaluate_route(network, traffic_model, path) if path else None
+        v_type = vehicle.vehicle_type if hasattr(vehicle, "vehicle_type") else "Cars"
+        metrics = evaluate_route(network, traffic_model, path, vehicle_type=v_type) if path else None
         results.append(
             BaselineResult(
                 vehicle_id=vehicle.vehicle_id,
@@ -172,4 +213,3 @@ def compute_baseline_solution_totals(results: List[BaselineResult]) -> Tuple[flo
             total_c += r.metrics.congestion
             valid_count += 1
     return round(total_d, 2), round(total_t, 2), round(total_c, 2), valid_count
-

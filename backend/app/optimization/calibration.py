@@ -40,6 +40,7 @@ def calibrate(
     """
     rng = random.Random(seed)
     dimensions = len(vehicles) * steps_per_vehicle
+    v_types = [v.vehicle_type if hasattr(v, "vehicle_type") else "Cars" for v in vehicles]
 
     time_totals: List[float] = []
     distance_totals: List[float] = []
@@ -51,12 +52,13 @@ def calibrate(
             network, traffic_model, vehicles, particle, steps_per_vehicle
         )
 
-        # Dynamic load coupling for candidate routes
-        traffic_model.update_vehicle_loads(routes)
+        # Dynamic load coupling with PCE weights
+        traffic_model.update_vehicle_loads(routes, vehicle_types=v_types)
 
         t_total = d_total = c_total = 0.0
-        for path in routes:
-            metrics = evaluate_route(network, traffic_model, path)
+        for i, path in enumerate(routes):
+            v_type = v_types[i] if i < len(v_types) else "Cars"
+            metrics = evaluate_route(network, traffic_model, path, vehicle_type=v_type)
             t_total += metrics.time_min
             d_total += metrics.distance_km
             c_total += metrics.congestion

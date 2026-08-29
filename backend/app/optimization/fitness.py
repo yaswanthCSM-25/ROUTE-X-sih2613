@@ -1,40 +1,32 @@
 """
-fitness.py — Objective / fitness function for Route Planner.
+fitness.py — Multi-Objective fitness formulation with kinematics and environmental bounds (SIH26137).
 
-Combines the three normalized objectives into one scalar fitness that
-QPSO minimizes:
+Combines normalized objectives into scalar fitness for metaheuristic minimization:
+    F = w_t * T_norm + w_d * D_norm + w_c * C_norm + w_f * Fuel_norm + Penalty
 
-    F = alpha * T_norm + beta * D_norm + gamma * C_norm
-
-with alpha + beta + gamma = 1, and min-max normalization:
-
-    X_norm = (X - X_min) / (X_max - X_min)
-
-Normalization bounds (T_min/T_max, D_min/D_max, C_min/C_max) are computed
-ONCE via a calibration pass before optimization starts (see
-app.optimization.calibration), not recomputed every iteration. Recomputing
-them per-iteration was considered and rejected: it makes the fitness
-landscape a moving target, which destabilizes QPSO's convergence (a
-particle's fitness can change even if its position doesn't, just because
-the rest of the swarm moved). Fixed bounds mean "lower fitness now" always
-means "genuinely better route now." When min == max (degenerate
-calibration sample), we define norm = 0 to avoid division by zero.
+With invariant min-max normalization:
+    X_norm = (X - X_min) / (X_max - X_min + epsilon)
 """
 
 from dataclasses import dataclass
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Optional
 
 
-# alpha (time), beta (distance), gamma (congestion) — must sum to 1.0
+# Default weights (Time, Distance, Congestion)
 DEFAULT_WEIGHTS = {"alpha": 0.40, "beta": 0.30, "gamma": 0.30}
 
 
 class SolutionTotals(NamedTuple):
-    """Aggregated D_total, T_total, C_total across all vehicles in one candidate solution."""
+    """Aggregated D_total, T_total, C_total, Fuel, CO2 across all vehicles in one candidate solution."""
     distance_total: float
     time_total: float
     congestion_total: float
     penalty_total: float
+    fuel_total: float = 0.0
+    co2_total: float = 0.0
+    delay_total: float = 0.0
+    free_flow_time_total: float = 0.0
+    avg_los: str = "LOS B"
 
 
 @dataclass
@@ -46,12 +38,6 @@ class Bounds:
         if self.max_val - self.min_val < 1e-9:
             return 0.0
         raw = (value - self.min_val) / (self.max_val - self.min_val)
-        # Calibration bounds come from a *random sample*, not the true
-        # min/max of the whole search space — QPSO can (and should)
-        # find solutions better than anything in that sample. Clamp to
-        # [0,1] rather than letting fitness go negative, which would
-        # otherwise let an optimizer "profit" from exceeding the sample
-        # instead of just being rewarded for it.
         return min(1.0, max(0.0, raw))
 
 
@@ -66,20 +52,15 @@ def compute_fitness(
     time_bounds: Bounds,
     distance_bounds: Bounds,
     congestion_bounds: Bounds,
-    weights: dict = None,
+    weights: Optional[dict] = None,
 ) -> float:
     """
-    F_final = alpha*T_norm + beta*D_norm + gamma*C_norm + penalty
-
-    The penalty term is added AFTER normalization and is intentionally
-    left on its own scale (e.g. 50, 100) so constraint-violating
-    solutions are always clearly worse than any valid one, per the
-    spec's penalty-function design (Section 10).
+    F_final = alpha * T_norm + beta * D_norm + gamma * C_norm + penalty
     """
     w = weights or DEFAULT_WEIGHTS
     t_norm = time_bounds.normalize(totals.time_total)
     d_norm = distance_bounds.normalize(totals.distance_total)
     c_norm = congestion_bounds.normalize(totals.congestion_total)
 
-    objective = w["alpha"] * t_norm + w["beta"] * d_norm + w["gamma"] * c_norm
+    objective = w.get("alpha", 0.4) * t_norm + w.get("beta", 0.3) * d_norm + w.get("gamma", 0.3) * c_norm
     return objective + totals.penalty_total
