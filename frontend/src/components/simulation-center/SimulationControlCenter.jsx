@@ -7,208 +7,213 @@ import {
   EventsSection,
   OptimizationSection,
 } from './SimulationSections';
-import { Play, RotateCcw, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Rocket, RotateCcw, ShieldCheck, Sparkles, Clock } from 'lucide-react';
 
-export default function SimulationControlCenter({
-  onApplyAndOptimize,
-  isLoading,
-  fleetSize,
-  onChangeFleetSize,
-}) {
-  const [config, setConfig] = useState({
-    vehicles: {
-      count: fleetSize || 10,
-      type: 'Mixed',
-    },
-    roadNetwork: {
-      sizeKm2: 50,
-      density: 'Medium',
-      oneWayRoutes: 2,
-      junctions: 'Medium',
-      laneDistribution: {
-        oneLanePercentage: 33.33,
-        twoLanePercentage: 33.33,
-        fourLanePercentage: 33.34,
-      },
-    },
-    traffic: {
-      level: 'Medium',
-      pattern: 'Random',
-      timeOfDay: '08:00',
-    },
-    conditions: {
-      weather: 'Normal',
-      roadCondition: {
-        good: 60,
-        average: 20,
-        bad: 20,
-      },
-    },
-    events: {
-      accidents: 0,
-      roadClosures: 0,
-      constructionZones: 0,
-    },
-    optimization: {
-      priority: 'Balanced',
-    },
-  });
+export const DEFAULT_SIMULATION_CONFIG = {
+  vehicles: {
+    count: 10,
+    type: 'Mixed',
+  },
+  roadNetwork: {
+    size: 'Medium',
+    density: 'Medium',
+    oneWay: 'OFF',
+    junctions: 'Medium',
+    roadCapacity: 'Medium',
+  },
+  traffic: {
+    level: 'Medium',
+    pattern: 'Random',
+    timeOfDay: '08:00 AM',
+  },
+  conditions: {
+    weather: 'Normal',
+    roadCondition: 'Average',
+  },
+  events: {
+    accidents: 0,
+    roadClosures: 0,
+    constructionZones: 0,
+  },
+  optimization: {
+    priority: 'Balanced',
+  },
+};
 
+export default function SimulationControlCenter({ onSimulate, isLoading = false }) {
+  const [config, setConfig] = useState(DEFAULT_SIMULATION_CONFIG);
   const [errors, setErrors] = useState({});
-  const [successMsg, setSuccessMsg] = useState(null);
 
-  const calculateMaxOneWay = (size) => {
-    if (isNaN(size) || size < 0) return 0;
-    return Math.floor((size / 100) * 4);
+  const handleSectionChange = (sectionKey, field, value) => {
+    setConfig((prev) => ({
+      ...prev,
+      [sectionKey]: {
+        ...prev[sectionKey],
+        [field]: value,
+      },
+    }));
+
+    // Clear field-specific error
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
   };
 
-  const maxOneWayRoutes = calculateMaxOneWay(config.roadNetwork.sizeKm2);
-
-  const updateSection = (section, field, value) => {
-    setConfig((prev) => {
-      const nextConfig = {
-        ...prev,
-        [section]: {
-          ...prev[section],
-          [field]: value,
-        },
-      };
-
-      if (section === 'roadNetwork' && field === 'sizeKm2') {
-        const newMax = calculateMaxOneWay(value);
-        if (nextConfig.roadNetwork.oneWayRoutes > newMax) {
-          nextConfig.roadNetwork.oneWayRoutes = newMax;
-        }
-      }
-
-      if (section === 'vehicles' && field === 'count') {
-        onChangeFleetSize(value);
-      }
-
-      return nextConfig;
-    });
-
-    setSuccessMsg(null);
+  const handleReset = () => {
+    setConfig(DEFAULT_SIMULATION_CONFIG);
+    setErrors({});
   };
 
-  const validateAll = () => {
-    const errs = {};
+  const handleSubmit = (e) => {
+    if (e) e.preventDefault();
+
+    // Validation
+    const newErrors = {};
     if (config.vehicles.count < 1 || config.vehicles.count > 20) {
-      errs.count = 'Vehicle count must be between 1 and 20';
-    }
-    if (config.roadNetwork.sizeKm2 < 20 || config.roadNetwork.sizeKm2 > 100) {
-      errs.sizeKm2 = 'Network size must be between 20 and 100 km²';
-    }
-    if (config.conditions.roadCondition.good > 60) {
-      errs.roadConditionGood = 'Good roads cannot exceed 60%';
-    }
-    if (config.conditions.roadCondition.bad > 20) {
-      errs.roadConditionBad = 'Bad roads cannot exceed 20%';
+      newErrors.count = 'Number of vehicles must be between 1 and 20.';
     }
 
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
 
-  const handleExecute = () => {
-    if (!validateAll()) return;
-
-    setSuccessMsg('Simulation configuration applied! Running QPSO fleet optimization...');
-
-    // Call unified optimization trigger
-    onApplyAndOptimize(config);
+    setErrors({});
+    if (onSimulate) {
+      onSimulate(config);
+    }
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      {/* Simulation Banner */}
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200, margin: '0 auto' }}>
+      {/* Header Banner */}
       <div className="glass-panel" style={{ padding: '24px 28px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span className="badge badge-cyan"><Sparkles size={13} /> Simulation Control Center</span>
-              <span className="badge badge-emerald">Route Planner Unified Engine</span>
+              <span className="badge badge-emerald">
+                <Sparkles size={13} /> SIH26137 Traffic Laboratory
+              </span>
+              <span className="badge badge-cyan">
+                <Clock size={13} /> ⏱️ Travel Time Hero Metric
+              </span>
             </div>
-            <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#f8fafc' }}>
-              Traffic Simulation & Network Parameter Control
-            </h2>
-            <p style={{ fontSize: '0.84rem', color: '#94a3b8', marginTop: 2 }}>
-              Configure comprehensive macro-simulation parameters: vehicle fleet density, road topology, weather, and incidents.
+            <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#f8fafc', margin: '4px 0' }}>
+              Simulation Setup & Scenario Configuration
+            </h1>
+            <p style={{ fontSize: '0.86rem', color: '#94a3b8', margin: 0 }}>
+              Configure vehicle composition, road capacity, traffic intensity, weather, disruptions, and optimization priorities.
             </p>
           </div>
 
           <button
-            className="btn btn-primary"
-            onClick={handleExecute}
-            disabled={isLoading}
-            style={{ padding: '12px 24px', fontSize: '0.92rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}
+            type="button"
+            onClick={handleReset}
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.84rem' }}
           >
-            <Play size={16} />
-            <span>{isLoading ? 'Simulating...' : 'Apply & Run Simulation'}</span>
+            <RotateCcw size={14} /> Reset Defaults
           </button>
         </div>
+      </div>
 
-        {successMsg && (
-          <div style={{
-            marginTop: 14,
-            padding: '10px 14px',
-            background: 'rgba(16, 185, 129, 0.15)',
-            border: '1px solid rgba(16, 185, 129, 0.4)',
-            borderRadius: 8,
-            fontSize: '0.84rem',
-            color: '#34d399',
+      {/* 6 Clean Configuration Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20 }}>
+        {/* 1. Vehicles */}
+        <VehiclesSection
+          count={config.vehicles.count}
+          type={config.vehicles.type}
+          onChange={(f, v) => handleSectionChange('vehicles', f, v)}
+          errors={errors}
+        />
+
+        {/* 2. Road Network */}
+        <RoadNetworkSection
+          size={config.roadNetwork.size}
+          density={config.roadNetwork.density}
+          oneWay={config.roadNetwork.oneWay}
+          junctions={config.roadNetwork.junctions}
+          roadCapacity={config.roadNetwork.roadCapacity}
+          onChange={(f, v) => handleSectionChange('roadNetwork', f, v)}
+        />
+
+        {/* 3. Traffic */}
+        <TrafficSection
+          level={config.traffic.level}
+          pattern={config.traffic.pattern}
+          timeOfDay={config.traffic.timeOfDay}
+          onChange={(f, v) => handleSectionChange('traffic', f, v)}
+        />
+
+        {/* 4. Conditions */}
+        <ConditionsSection
+          weather={config.conditions.weather}
+          roadCondition={config.conditions.roadCondition}
+          onChange={(f, v) => handleSectionChange('conditions', f, v)}
+        />
+
+        {/* 5. Events */}
+        <EventsSection
+          accidents={config.events.accidents}
+          roadClosures={config.events.roadClosures}
+          constructionZones={config.events.constructionZones}
+          onChange={(f, v) => handleSectionChange('events', f, v)}
+          errors={errors}
+        />
+
+        {/* 6. Optimization Priority */}
+        <OptimizationSection
+          priority={config.optimization.priority}
+          onChange={(f, v) => handleSectionChange('optimization', f, v)}
+        />
+      </div>
+
+      {/* Prominent Primary "SIMULATE" Button */}
+      <div style={{
+        marginTop: 10,
+        marginBottom: 30,
+        display: 'flex',
+        justifyContent: 'center',
+      }}>
+        <button
+          type="submit"
+          disabled={isLoading}
+          style={{
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            color: '#ffffff',
+            border: 'none',
+            borderRadius: 12,
+            padding: '18px 48px',
+            fontSize: '1.2rem',
+            fontWeight: 800,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-          }}>
-            <CheckCircle2 size={16} /> {successMsg}
-          </div>
-        )}
+            gap: 12,
+            boxShadow: '0 8px 24px rgba(16, 185, 129, 0.4)',
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoading) {
+              e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+              e.currentTarget.style.boxShadow = '0 12px 30px rgba(16, 185, 129, 0.55)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0) scale(1)';
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(16, 185, 129, 0.4)';
+          }}
+        >
+          <Rocket size={24} />
+          {isLoading ? 'GENERATING SIMULATION...' : '🚀 SIMULATE'}
+        </button>
       </div>
-
-      {/* Masonry-Style Grid Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18 }}>
-        {/* Column 1 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <VehiclesSection
-            {...config.vehicles}
-            onChange={(field, val) => updateSection('vehicles', field, val)}
-            errors={errors}
-          />
-          <ConditionsSection
-            {...config.conditions}
-            onChange={(field, val) => updateSection('conditions', field, val)}
-            errors={errors}
-          />
-        </div>
-
-        {/* Column 2 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <TrafficSection
-            {...config.traffic}
-            onChange={(field, val) => updateSection('traffic', field, val)}
-          />
-          <EventsSection
-            {...config.events}
-            onChange={(field, val) => updateSection('events', field, val)}
-            errors={errors}
-          />
-        </div>
-
-        {/* Column 3 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <RoadNetworkSection
-            {...config.roadNetwork}
-            onChange={(field, val) => updateSection('roadNetwork', field, val)}
-            errors={errors}
-            maxOneWayRoutes={maxOneWayRoutes}
-          />
-          <OptimizationSection
-            {...config.optimization}
-            onChange={(field, val) => updateSection('optimization', field, val)}
-          />
-        </div>
-      </div>
-    </div>
+    </form>
   );
 }

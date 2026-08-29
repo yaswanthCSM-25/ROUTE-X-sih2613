@@ -24,7 +24,7 @@ import {
 } from './services/api';
 
 export default function App() {
-  const [activePage, setActivePage] = useState('overview');
+  const [activePage, setActivePage] = useState('simulation');
   const [backendOnline, setBackendOnline] = useState(false);
   const [projectInfo, setProjectInfo] = useState(null);
   const [scenarios, setScenarios] = useState([
