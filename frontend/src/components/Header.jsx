@@ -15,7 +15,8 @@ import {
   Radio,
   Zap,
   Play,
-  Flame,
+  Moon,
+  Sun,
 } from 'lucide-react';
 
 export default function Header({
@@ -26,6 +27,8 @@ export default function Header({
   currentPreset,
   onSelectPreset,
   onLaunchDemoMode,
+  theme = 'dark',
+  onToggleTheme,
 }) {
   const navItems = [
     { id: 'simulation', label: '1. Simulation Lab', icon: Navigation },
@@ -39,13 +42,15 @@ export default function Header({
 
   return (
     <header style={{
-      background: 'rgba(5, 11, 20, 0.94)',
+      background: 'var(--bg-surface)',
       backdropFilter: 'blur(24px)',
-      borderBottom: '1px solid rgba(0, 240, 255, 0.25)',
+      WebkitBackdropFilter: 'blur(24px)',
+      borderBottom: '1px solid var(--border-subtle)',
       position: 'sticky',
       top: 0,
       zIndex: 100,
-      boxShadow: '0 4px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 240, 255, 0.1)',
+      boxShadow: 'var(--shadow-md)',
+      transition: 'all 0.3s ease',
     }}>
       {/* Upper Branding & Utility Bar */}
       <div style={{
@@ -57,23 +62,23 @@ export default function Header({
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: 12,
-        borderBottom: '1px solid rgba(0, 240, 255, 0.08)',
+        borderBottom: '1px solid var(--border-subtle)',
       }}>
         {/* Branding with Holographic Emblem */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{
-            width: 40,
-            height: 40,
+            width: 38,
+            height: 38,
             borderRadius: 10,
-            background: 'linear-gradient(135deg, #00f0ff 0%, #0284c7 100%)',
+            background: 'linear-gradient(135deg, var(--accent-cyan) 0%, #0284c7 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 20px rgba(0, 240, 255, 0.6)',
+            boxShadow: '0 0 18px rgba(0, 240, 255, 0.5)',
             border: '1px solid #ffffff',
             position: 'relative',
           }}>
-            <Cpu size={22} color="#030712" />
+            <Cpu size={20} color="#030712" />
             <span style={{
               position: 'absolute',
               top: -2,
@@ -88,24 +93,24 @@ export default function Header({
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h1 className="font-orbitron" style={{ fontSize: '1.2rem', fontWeight: 900, color: '#f0fdf4', letterSpacing: '0.05em' }}>
+              <h1 className="font-orbitron" style={{ fontSize: '1.18rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>
                 ROUTE PLANNER
               </h1>
-              <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
+              <span className="badge badge-cyan" style={{ fontSize: '0.7rem' }}>
                 <Sparkles size={11} /> SIH26137
               </span>
-              <span className="badge badge-orange" style={{ fontSize: '0.72rem' }}>
+              <span className="badge badge-orange" style={{ fontSize: '0.7rem' }}>
                 Egreen Quanta
               </span>
             </div>
-            <p style={{ fontSize: '0.74rem', color: '#94a3b8', marginTop: 1, letterSpacing: '0.02em' }}>
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 1, letterSpacing: '0.01em' }}>
               Quantum-Inspired Intelligent Traffic Route Optimization in Transportation Systems
             </p>
           </div>
         </div>
 
-        {/* Right Section: Scenario Switcher, Demo Mode & API Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {/* Right Section: Scenario Switcher, Demo Mode, Theme Toggle & API Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           {/* Quick 1-Click SIH Demo Mode Button */}
           {onLaunchDemoMode && (
             <button
@@ -133,13 +138,13 @@ export default function Header({
 
           {/* Scenario Preset Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.72rem', color: '#00f0ff', fontWeight: 700, fontFamily: 'JetBrains Mono', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', fontWeight: 700, fontFamily: 'JetBrains Mono' }}>
               SCENARIO:
             </span>
             <div style={{
               display: 'flex',
-              background: 'rgba(8, 18, 38, 0.9)',
-              border: '1px solid rgba(0, 240, 255, 0.3)',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: 8,
               padding: 2,
               gap: 2,
@@ -149,16 +154,15 @@ export default function Header({
                   key={s.id}
                   onClick={() => onSelectPreset(s.id)}
                   style={{
-                    background: currentPreset === s.id ? 'linear-gradient(135deg, rgba(0, 240, 255, 0.3) 0%, rgba(2, 132, 199, 0.4) 100%)' : 'transparent',
-                    border: currentPreset === s.id ? '1px solid #00f0ff' : '1px solid transparent',
-                    color: currentPreset === s.id ? '#00f0ff' : '#94a3b8',
-                    padding: '4px 10px',
+                    background: currentPreset === s.id ? 'var(--accent-cyan)' : 'transparent',
+                    border: 'none',
+                    color: currentPreset === s.id ? '#030712' : 'var(--text-secondary)',
+                    padding: '4px 9px',
                     borderRadius: 6,
-                    fontSize: '0.74rem',
-                    fontWeight: 600,
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
-                    boxShadow: currentPreset === s.id ? '0 0 10px rgba(0, 240, 255, 0.3)' : 'none',
                   }}
                 >
                   {s.name?.replace(' Demo', '')}
@@ -167,16 +171,38 @@ export default function Header({
             </div>
           </div>
 
+          {/* Dark / Light Mode Toggle Button */}
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              className="btn btn-secondary"
+              style={{
+                padding: '6px 10px',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                fontSize: '0.76rem',
+                cursor: 'pointer',
+              }}
+              title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+              aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            >
+              {theme === 'dark' ? <Sun size={14} color="#fbbf24" /> : <Moon size={14} color="#0284c7" />}
+              <span style={{ fontWeight: 700 }}>{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
+            </button>
+          )}
+
           {/* Backend Status Indicator */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: 6,
             padding: '5px 12px',
-            background: 'rgba(8, 18, 38, 0.9)',
+            background: 'var(--bg-input)',
             border: backendOnline ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(244, 63, 94, 0.4)',
             borderRadius: 20,
-            fontSize: '0.74rem',
+            fontSize: '0.72rem',
             fontFamily: 'JetBrains Mono',
           }}>
             <span style={{
@@ -186,7 +212,7 @@ export default function Header({
               background: backendOnline ? '#10b981' : '#f43f5e',
               boxShadow: backendOnline ? '0 0 10px #10b981' : '0 0 10px #f43f5e',
             }} />
-            <span style={{ color: backendOnline ? '#34d399' : '#f43f5e', fontWeight: 700 }}>
+            <span style={{ color: backendOnline ? 'var(--accent-emerald)' : 'var(--accent-rose)', fontWeight: 700 }}>
               {backendOnline ? 'QUANTUM ENGINE READY' : 'OFFLINE'}
             </span>
           </div>
@@ -217,18 +243,17 @@ export default function Header({
                 padding: '8px 14px',
                 background: isActive ? 'linear-gradient(180deg, rgba(0, 240, 255, 0.15) 0%, rgba(0, 240, 255, 0.02) 100%)' : 'transparent',
                 border: 'none',
-                borderBottom: isActive ? '2px solid #00f0ff' : '2px solid transparent',
+                borderBottom: isActive ? '2px solid var(--accent-cyan)' : '2px solid transparent',
                 borderRadius: '6px 6px 0 0',
-                color: isActive ? '#00f0ff' : '#94a3b8',
+                color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
                 fontSize: '0.8rem',
                 fontWeight: isActive ? 700 : 500,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.15s ease',
-                boxShadow: isActive ? '0 4px 15px rgba(0, 240, 255, 0.2)' : 'none',
               }}
             >
-              <Icon size={14} color={isActive ? '#00f0ff' : '#64748b'} />
+              <Icon size={14} color={isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'} />
               <span>{item.label}</span>
             </button>
           );

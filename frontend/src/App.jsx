@@ -44,6 +44,20 @@ export default function App() {
   const [roadOverrides, setRoadOverrides] = useState({});
   const [baselineMethod, setBaselineMethod] = useState('dijkstra');
 
+  // Theme State (Dark / Light) with localStorage persistence
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('route_planner_theme') || 'dark';
+  });
+
+  useEffect(() => {
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('route_planner_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
   // Optimization params, weights & BPR parameters
   const [params, setParams] = useState({
     num_particles: 20,
@@ -290,6 +304,8 @@ export default function App() {
         currentPreset={currentPreset}
         onSelectPreset={loadScenario}
         onLaunchDemoMode={handleLaunchDemoMode}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main Page Content Body */}
