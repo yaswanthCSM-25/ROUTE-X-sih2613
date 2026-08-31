@@ -2,7 +2,8 @@
  * api.js — REST Client for Route Planner Backend API (SIH26137)
  */
 
-const API_BASE = '/api';
+const RAW_API_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+const API_BASE = RAW_API_URL ? `${RAW_API_URL.replace(/\/$/, '')}/api` : '/api';
 
 export async function fetchHealth() {
   try {
