@@ -14,6 +14,8 @@ import {
   FileText,
   Radio,
   Zap,
+  Play,
+  Flame,
 } from 'lucide-react';
 
 export default function Header({
@@ -23,24 +25,21 @@ export default function Header({
   scenarios,
   currentPreset,
   onSelectPreset,
+  onLaunchDemoMode,
 }) {
   const navItems = [
     { id: 'simulation', label: '1. Simulation Lab', icon: Navigation },
     { id: 'optimization', label: '2. Route Optimization', icon: Zap },
-    { id: 'overview', label: '3. Overview', icon: Compass },
+    { id: 'results', label: '3. Results & Analysis', icon: Award },
     { id: 'math_model', label: '4. Math Model', icon: BookOpen },
-    { id: 'routes', label: '5. Routes & Fleet', icon: Navigation },
-    { id: 'results', label: '6. Scorecard', icon: Award },
-    { id: 'convergence', label: '7. Convergence', icon: TrendingDown },
-    { id: 'benchmark', label: '8. Benchmark', icon: BarChart2 },
-    { id: 'dynamic_routing', label: '9. Dynamic Rerouting', icon: AlertTriangle },
-    { id: 'architecture', label: '10. Architecture', icon: Layers },
-    { id: 'about_sih', label: '11. About SIH', icon: FileText },
+    { id: 'dynamic_routing', label: '5. Dynamic Incidents', icon: AlertTriangle },
+    { id: 'benchmark', label: '6. Multi-Seed Benchmark', icon: BarChart2 },
+    { id: 'about_sih', label: '7. SIH & Architecture', icon: FileText },
   ];
 
   return (
     <header style={{
-      background: 'rgba(5, 11, 20, 0.92)',
+      background: 'rgba(5, 11, 20, 0.94)',
       backdropFilter: 'blur(24px)',
       borderBottom: '1px solid rgba(0, 240, 255, 0.25)',
       position: 'sticky',
@@ -105,9 +104,34 @@ export default function Header({
           </div>
         </div>
 
-        {/* Right Section: Scenario Switcher & API Status */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {/* Scenario Selector */}
+        {/* Right Section: Scenario Switcher, Demo Mode & API Status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {/* Quick 1-Click SIH Demo Mode Button */}
+          {onLaunchDemoMode && (
+            <button
+              onClick={onLaunchDemoMode}
+              style={{
+                background: 'linear-gradient(135deg, #ff8500 0%, #ff6b00 100%)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '6px 14px',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 0 15px rgba(255, 107, 0, 0.4)',
+                letterSpacing: '0.03em',
+              }}
+              title="Launch instant pre-configured SIH Demonstration Scenario"
+            >
+              <Play size={13} /> 🎬 DEMO MODE
+            </button>
+          )}
+
+          {/* Scenario Preset Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ fontSize: '0.72rem', color: '#00f0ff', fontWeight: 700, fontFamily: 'JetBrains Mono', letterSpacing: '0.05em' }}>
               SCENARIO:

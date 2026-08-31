@@ -256,6 +256,27 @@ export default function App() {
     setVehicles(updated);
   };
 
+  const handleLaunchDemoMode = () => {
+    const demoConfig = {
+      vehicles: { count: 10, type: 'Mixed' },
+      roadNetwork: { size: 'Medium', density: 'Medium', oneWay: 'ON', junctions: 'Medium', roadCapacity: 'Medium' },
+      traffic: { level: 'High', pattern: 'Random', timeOfDay: '06:30 PM' },
+      conditions: { weather: 'Rainy', roadCondition: 'Average' },
+      events: { accidents: 1, roadClosures: 1, constructionZones: 2 },
+      optimization: { priority: 'Travel Time' },
+    };
+    setSimulationConfig(demoConfig);
+    setFleetSize(10);
+    setActivePage('simulation');
+    
+    // Trigger real optimization run with Travel Time priority
+    handleRunOptimization({
+      weights: { alpha: 0.80, beta: 0.10, gamma: 0.10 },
+      iterations: 100,
+      particles: 30,
+    });
+  };
+
   const availableNodes = (network?.nodes || []).map((n) => n.id);
 
   return (
@@ -268,6 +289,7 @@ export default function App() {
         scenarios={scenarios}
         currentPreset={currentPreset}
         onSelectPreset={loadScenario}
+        onLaunchDemoMode={handleLaunchDemoMode}
       />
 
       {/* Main Page Content Body */}
