@@ -1,14 +1,13 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
+  "buildCommand": "npm run build --workspace=frontend",
   "outputDirectory": "frontend/dist",
-  "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "https://route-planner-sih26137.onrender.com/api/$1"
+      "source": "/api/:path*",
+      "destination": "https://route-planner-sih26137.onrender.com/api/:path*"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!assets/|favicon.ico|.*\\..*).*)",
       "destination": "/index.html"
     }
   ]
