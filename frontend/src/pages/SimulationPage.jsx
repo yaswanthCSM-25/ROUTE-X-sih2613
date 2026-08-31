@@ -13,6 +13,9 @@ export default function SimulationPage({
   currentPreset,
   onSelectPreset,
   onToggleRoadStatus,
+  onInjectIncident,
+  onClearIncidents,
+  incidentResult,
   fleetSize,
   onChangeFleetSize,
   vehicles,
@@ -59,12 +62,17 @@ export default function SimulationPage({
           isLoading={isLoading}
         />
       ) : (
-        /* Phase 2: Full-Screen Interactive 2D Illustrated City Map */
+        /* Phase 2: Full-Screen Interactive 2D Illustrated City Map with Integrated Dynamic Incidents */
         <CitySimulationMap
           config={simulationConfig}
           network={network}
           traffic={traffic}
           vehicles={vehicles}
+          currentPreset={currentPreset}
+          onInjectIncident={onInjectIncident}
+          onClearIncidents={onClearIncidents}
+          incidentResult={incidentResult}
+          onToggleRoadStatus={onToggleRoadStatus}
           onReconfigure={handleReconfigure}
           onRunOptimization={handleExecuteProceedToOptimization}
           isLoading={isLoading}

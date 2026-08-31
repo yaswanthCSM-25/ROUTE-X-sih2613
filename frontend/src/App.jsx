@@ -357,6 +357,9 @@ export default function App() {
             currentPreset={currentPreset}
             onSelectPreset={loadScenario}
             onToggleRoadStatus={handleToggleRoadStatus}
+            onInjectIncident={handleInjectIncident}
+            onClearIncidents={handleClearIncidents}
+            incidentResult={incidentResult}
             fleetSize={fleetSize}
             onChangeFleetSize={(sz) => {
               setFleetSize(sz);
@@ -421,19 +424,6 @@ export default function App() {
           <BenchmarkPage
             currentPreset={currentPreset}
             fleetSize={fleetSize}
-          />
-        )}
-
-        {activePage === 'dynamic_routing' && (
-          <DynamicRoutingPage
-            network={network}
-            traffic={traffic}
-            currentPreset={currentPreset}
-            onInjectIncident={handleInjectIncident}
-            onClearIncidents={handleClearIncidents}
-            incidentResult={incidentResult}
-            isLoading={isLoading}
-            onToggleRoadStatus={handleToggleRoadStatus}
           />
         )}
 

@@ -31,13 +31,12 @@ export default function Header({
   onToggleTheme,
 }) {
   const navItems = [
-    { id: 'simulation', label: '1. Simulation Lab', icon: Navigation },
+    { id: 'simulation', label: '1. Simulation Lab & Map', icon: Navigation },
     { id: 'optimization', label: '2. Route Optimization', icon: Zap },
     { id: 'results', label: '3. Results & Analysis', icon: Award },
-    { id: 'math_model', label: '4. Math Model', icon: BookOpen },
-    { id: 'dynamic_routing', label: '5. Dynamic Incidents', icon: AlertTriangle },
-    { id: 'benchmark', label: '6. Multi-Seed Benchmark', icon: BarChart2 },
-    { id: 'about_sih', label: '7. SIH & Architecture', icon: FileText },
+    { id: 'math_model', label: '4. Mathematical Model', icon: BookOpen },
+    { id: 'benchmark', label: '5. Multi-Seed Benchmark', icon: BarChart2 },
+    { id: 'about_sih', label: '6. SIH Hub & Deliverables', icon: FileText },
   ];
 
   return (
