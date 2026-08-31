@@ -45,7 +45,6 @@ export default function SimulationControlCenter({
   scenarios = [],
   currentPreset = 'demo',
   onSelectPreset,
-  onLaunchDemoMode,
   isLoading = false,
 }) {
   const [config, setConfig] = useState(DEFAULT_SIMULATION_CONFIG);
@@ -118,31 +117,6 @@ export default function SimulationControlCenter({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {onLaunchDemoMode && (
-              <button
-                type="button"
-                onClick={onLaunchDemoMode}
-                style={{
-                  background: 'linear-gradient(135deg, #ff8500 0%, #ff6b00 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 10,
-                  padding: '9px 18px',
-                  fontSize: '0.85rem',
-                  fontWeight: 800,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  boxShadow: '0 0 20px rgba(255, 107, 0, 0.45)',
-                  letterSpacing: '0.03em',
-                }}
-                title="Launch instant 1-click SIH Demonstration with real QPSO optimization and live fleet"
-              >
-                <Play size={14} /> 🎬 DEMO MODE
-              </button>
-            )}
-
             <button
               type="button"
               onClick={handleReset}

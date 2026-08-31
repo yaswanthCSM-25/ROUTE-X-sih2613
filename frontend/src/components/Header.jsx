@@ -26,7 +26,6 @@ export default function Header({
   scenarios,
   currentPreset,
   onSelectPreset,
-  onLaunchDemoMode,
   theme = 'dark',
   onToggleTheme,
 }) {

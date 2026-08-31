@@ -91,7 +91,7 @@ export default function AboutSihPage({ info }) {
       id: 'DEL-10',
       component: 'Production Web Platform & Dual-Theme UI/UX',
       formula: 'React 18 + Vite SPA + FastAPI Async REST Engine',
-      description: 'Full-screen 2D map visualization, Obsidian Dark Mode & Gov-Portal Light Mode with localStorage persistence, and 1-click SIH Demo Mode.',
+      description: 'Full-screen 2D map visualization, Obsidian Dark Mode & Gov-Portal Light Mode with localStorage persistence, and modular smart city scenario presets.',
       status: 'Delivered',
     },
   ];

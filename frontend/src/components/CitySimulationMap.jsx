@@ -48,7 +48,6 @@ export default function CitySimulationMap({
   scenarios = [],
   currentPreset = 'demo',
   onSelectPreset,
-  onLaunchDemoMode,
   onInjectIncident,
   onClearIncidents,
   incidentResult,
@@ -834,29 +833,6 @@ export default function CitySimulationMap({
         backdropFilter: 'blur(10px)',
         flexWrap: 'wrap',
       }}>
-        {onLaunchDemoMode && (
-          <button
-            onClick={onLaunchDemoMode}
-            style={{
-              background: 'linear-gradient(135deg, #ff8500 0%, #ff6b00 100%)',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: 14,
-              padding: '4px 11px',
-              fontSize: '0.74rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              boxShadow: '0 0 10px rgba(255, 107, 0, 0.4)',
-            }}
-            title="Launch 1-click SIH Demonstration Scenario"
-          >
-            <Play size={11} /> 🎬 DEMO MODE
-          </button>
-        )}
-
         {/* Scenario Switcher Buttons */}
         {scenarios && scenarios.length > 0 && (
           <div style={{ display: 'flex', background: 'var(--bg-input)', borderRadius: 14, padding: 2, border: '1px solid var(--border-subtle)' }}>
