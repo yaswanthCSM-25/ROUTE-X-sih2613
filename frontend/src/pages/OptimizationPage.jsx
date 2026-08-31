@@ -96,34 +96,69 @@ export default function OptimizationPage({
   // Check if any route was found or network disconnected
   const isFeasible = !benchmark || (routes && routes.length > 0) || !benchmark?.error;
 
-  // Build complete list of vehicles for interactive selection
+  // Vehicle Specifications & Physics Profiles
+  const VEHICLE_SPECS = {
+    Cars: { label: 'Car', icon: '🚗', baseSpeed: 50, fuelPerKm: 0.078, co2Factor: 2.32, pce: 1.0 },
+    Bikes: { label: 'Motorcycle / Bike', icon: '🏍️', baseSpeed: 58, fuelPerKm: 0.032, co2Factor: 2.15, pce: 0.5 },
+    Scooters: { label: 'Urban Scooter', icon: '🛵', baseSpeed: 40, fuelPerKm: 0.028, co2Factor: 2.10, pce: 0.5 },
+    Vans: { label: 'Delivery Van', icon: '🚐', baseSpeed: 44, fuelPerKm: 0.114, co2Factor: 2.68, pce: 1.5 },
+    Lorries: { label: 'Heavy Lorry', icon: '🚚', baseSpeed: 34, fuelPerKm: 0.285, co2Factor: 2.68, pce: 3.0 },
+  };
+
+  const configuredVehicleType = simulationConfig?.vehicles?.type || 'Mixed';
   const totalVehiclesCount = vehicles?.length || fleetSize || simulationConfig?.vehicles?.count || 10;
+
   const vehiclesList = useMemo(() => {
-    if (vehicles && vehicles.length > 0) return vehicles;
-    const typePool = ['Cars', 'Bikes', 'Vans', 'Lorries', 'Scooters'];
+    if (vehicles && vehicles.length > 0) {
+      return vehicles.map((v, i) => {
+        let vType = v.vehicle_type || v.type;
+        if (!vType || vType === 'Mixed') {
+          vType = ['Cars', 'Vans', 'Lorries', 'Bikes', 'Scooters'][i % 5];
+        }
+        return {
+          id: v.vehicle_id || v.id || `V-${String(i + 1).padStart(2, '0')}`,
+          type: vType,
+          start: v.origin || originNode,
+          destination: v.destination || destNode,
+        };
+      });
+    }
+
+    const typePool = configuredVehicleType === 'Mixed'
+      ? ['Cars', 'Vans', 'Lorries', 'Bikes', 'Scooters']
+      : [configuredVehicleType];
+
     const list = [];
     for (let i = 0; i < totalVehiclesCount; i++) {
+      const vType = typePool[i % typePool.length];
       list.push({
         id: `V-${String(i + 1).padStart(2, '0')}`,
-        type: typePool[i % typePool.length],
+        type: vType,
         start: originNode,
         destination: destNode,
       });
     }
     return list;
-  }, [vehicles, totalVehiclesCount, originNode, destNode]);
+  }, [vehicles, totalVehiclesCount, configuredVehicleType, originNode, destNode]);
 
-  const currentSelectedVehicle = vehiclesList[selectedVehicleIdx] || vehiclesList[0] || { id: 'V-01', type: 'Cars' };
+  const currentSelectedVehicle = vehiclesList[selectedVehicleIdx] || vehiclesList[0] || { id: 'V-01', type: 'Cars', start: 'A', destination: 'I' };
+  const currentSpec = VEHICLE_SPECS[currentSelectedVehicle.type] || VEHICLE_SPECS.Cars;
+  const speedRatio = 50 / (currentSpec.baseSpeed || 50);
+
   const selectedQpsoRoute = routes[selectedVehicleIdx];
   const selectedBaselineRoute = benchmark?.routes?.baseline?.[selectedVehicleIdx];
 
-  const selectedRoutePath = selectedQpsoRoute?.path || (network?.nodes?.length ? [originNode, network.nodes[Math.min(1, network.nodes.length - 1)]?.id, destNode] : ['A', 'E', 'I']);
-  const selectedTravelTime = selectedQpsoRoute?.travel_time_min || (afterTravelTimeMin ? afterTravelTimeMin * (1 + (selectedVehicleIdx % 3) * 0.08) : 12.4);
-  const selectedBaselineTime = selectedBaselineRoute?.travel_time_min || (beforeTravelTimeMin ? beforeTravelTimeMin * (1 + (selectedVehicleIdx % 3) * 0.08) : 18.7);
+  const selectedRoutePath = selectedQpsoRoute?.path || (network?.nodes?.length ? [currentSelectedVehicle.start || originNode, network.nodes[Math.min(1, network.nodes.length - 1)]?.id, currentSelectedVehicle.destination || destNode] : ['A', 'E', 'I']);
+  const baseTravelTime = selectedQpsoRoute?.travel_time_min || (afterTravelTimeMin || 12.4);
+  const selectedTravelTime = baseTravelTime * speedRatio;
+
+  const baseBaselineTime = selectedBaselineRoute?.travel_time_min || (beforeTravelTimeMin || 18.7);
+  const selectedBaselineTime = baseBaselineTime * speedRatio;
+
   const selectedDistance = selectedQpsoRoute?.distance_km || (totalDistanceKm ? totalDistanceKm / totalVehiclesCount : 14.2);
-  const selectedSpeed = selectedTravelTime > 0 ? Math.round((selectedDistance / (selectedTravelTime / 60))) : 48;
-  const selectedFuel = selectedQpsoRoute?.fuel_liters || (selectedDistance * (currentSelectedVehicle.type === 'Lorries' ? 0.28 : (currentSelectedVehicle.type === 'Vans' ? 0.14 : (currentSelectedVehicle.type === 'Bikes' ? 0.04 : 0.08))));
-  const selectedCo2 = selectedQpsoRoute?.co2_kg || (selectedFuel * 2.39);
+  const selectedSpeed = selectedTravelTime > 0 ? Math.round((selectedDistance / (selectedTravelTime / 60))) : currentSpec.baseSpeed;
+  const selectedFuel = selectedDistance * currentSpec.fuelPerKm;
+  const selectedCo2 = selectedFuel * currentSpec.co2Factor;
   const timeSavedPct = selectedBaselineTime > 0 ? Math.max(0, Math.round(((selectedBaselineTime - selectedTravelTime) / selectedBaselineTime) * 1000) / 10) : 32.5;
 
   return (
@@ -327,17 +362,22 @@ export default function OptimizationPage({
             <div className="glass-panel" style={{ padding: '20px 22px', border: '1px solid rgba(0, 240, 255, 0.35)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                 <h3 style={{ fontSize: '1rem', color: 'var(--accent-cyan)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                  <Car size={18} color="var(--accent-cyan)" /> 🚗 Selected Vehicle Telemetry
+                  <span style={{ fontSize: '1.2rem' }}>{currentSpec.icon}</span> Selected Vehicle Telemetry
                 </h3>
-                <span className="badge badge-cyan" style={{ fontSize: '0.74rem' }}>
-                  {vehiclesList.length} Vehicles in Fleet
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="badge badge-purple" style={{ fontSize: '0.72rem' }}>
+                    PCE: {currentSpec.pce.toFixed(1)} ({currentSpec.label})
+                  </span>
+                  <span className="badge badge-cyan" style={{ fontSize: '0.72rem' }}>
+                    {vehiclesList.length} In Fleet
+                  </span>
+                </div>
               </div>
 
               {/* Vehicle Selector Dropdown */}
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 5, display: 'block' }}>
-                  SELECT VEHICLE TO INSPECT VALUES:
+                  SELECT VEHICLE TO INSPECT DYNAMIC SIMULATION VALUES:
                 </label>
                 <select
                   value={selectedVehicleIdx}
@@ -345,21 +385,29 @@ export default function OptimizationPage({
                   className="form-control"
                   style={{ fontSize: '0.84rem', padding: '7px 12px', background: 'var(--bg-input)', borderRadius: 8 }}
                 >
-                  {vehiclesList.map((v, i) => (
-                    <option key={v.id || i} value={i}>
-                      {v.id || `V-${String(i + 1).padStart(2, '0')}`} — {v.type || 'Car'} ({routes[i]?.travel_time_min ? `${routes[i].travel_time_min.toFixed(1)} min` : 'Active'})
-                    </option>
-                  ))}
+                  {vehiclesList.map((v, i) => {
+                    const s = VEHICLE_SPECS[v.type] || VEHICLE_SPECS.Cars;
+                    return (
+                      <option key={v.id || i} value={i}>
+                        {s.icon} {v.id || `V-${String(i + 1).padStart(2, '0')}`} — {s.label} ({v.start} ➔ {v.destination})
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
               {/* Selected Vehicle Value Details Grid */}
               {currentSelectedVehicle && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {/* Route Path Display */}
+                  {/* Route & Odometry Info */}
                   <div style={{ padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>ASSIGNED OPTIMAL ROUTE</div>
-                    <div style={{ fontSize: '0.92rem', color: '#34d399', fontWeight: 800, marginTop: 3, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontFamily: 'JetBrains Mono' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>ASSIGNED OPTIMAL CORRIDOR</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--accent-cyan)', fontWeight: 700 }}>
+                        {currentSelectedVehicle.start} ➔ {currentSelectedVehicle.destination}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.92rem', color: '#34d399', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontFamily: 'JetBrains Mono' }}>
                       {selectedRoutePath.length > 0 ? selectedRoutePath.join(' ➔ ') : 'Pending Optimization'}
                     </div>
                   </div>
@@ -384,7 +432,7 @@ export default function OptimizationPage({
                         {selectedDistance.toFixed(1)} km
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                        Avg Speed: ~{selectedSpeed} km/h
+                        Cruising Speed: ~{selectedSpeed} km/h
                       </div>
                     </div>
 
@@ -394,7 +442,7 @@ export default function OptimizationPage({
                         {selectedFuel.toFixed(2)} L
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                        Class: {currentSelectedVehicle.type || 'Car'}
+                        Rate: {(currentSpec.fuelPerKm * 100).toFixed(1)} L / 100km
                       </div>
                     </div>
 
@@ -404,7 +452,7 @@ export default function OptimizationPage({
                         {selectedCo2.toFixed(2)} kg
                       </div>
                       <div style={{ fontSize: '0.7rem', color: '#34d399', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
-                        <ShieldCheck size={11} /> 100% Feasible
+                        <ShieldCheck size={11} /> 100% Feasible Route
                       </div>
                     </div>
                   </div>
