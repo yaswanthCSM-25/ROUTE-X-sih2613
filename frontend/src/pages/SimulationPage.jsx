@@ -5,6 +5,8 @@ import CitySimulationMap from '../components/CitySimulationMap';
 export default function SimulationPage({
   simulationConfig,
   onUpdateSimulationConfig,
+  simulationMode: externalSimMode,
+  onSetSimulationMode: externalSetSimMode,
   network,
   traffic,
   scenarios,
@@ -22,7 +24,10 @@ export default function SimulationPage({
   benchmark,
 }) {
   // Mode: 'setup' (Phase 1 6-section config) | 'map' (Phase 2 Full-Screen 2D City Map)
-  const [simulationMode, setSimulationMode] = useState('setup');
+  const [internalMode, setInternalMode] = useState('setup');
+
+  const simulationMode = externalSimMode !== undefined ? externalSimMode : internalMode;
+  const setSimulationMode = externalSetSimMode || setInternalMode;
 
   const handleSimulate = (config) => {
     if (onUpdateSimulationConfig) {

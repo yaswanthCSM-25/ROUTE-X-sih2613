@@ -84,6 +84,9 @@ export default function App() {
     optimization: { priority: 'Balanced' },
   });
 
+  // Simulation Mode ('setup' | 'map')
+  const [simulationMode, setSimulationMode] = useState('setup');
+
   // Benchmark results & Incident state
   const [benchmark, setBenchmark] = useState(null);
   const [incidentResult, setIncidentResult] = useState(null);
@@ -116,6 +119,28 @@ export default function App() {
     const defaultCount = presetId === 'metropolitan' ? 20 : (presetId === 'smart_grid' ? 10 : 5);
     setFleetSize(defaultCount);
 
+    // Sync simulationConfig to reflect preset scale & conditions
+    setSimulationConfig((prev) => ({
+      ...prev,
+      roadNetwork: {
+        ...prev.roadNetwork,
+        size: presetId === 'metropolitan' || presetId === 'smart_grid' ? 'High' : 'Medium',
+        density: presetId === 'metropolitan' ? 'High' : 'Medium',
+      },
+      traffic: {
+        ...prev.traffic,
+        level: presetId === 'rush_hour' ? 'High' : 'Medium',
+      },
+      events: {
+        ...prev.events,
+        roadClosures: presetId === 'bridge_closure' ? 1 : 0,
+      },
+      vehicles: {
+        ...prev.vehicles,
+        count: defaultCount,
+      },
+    }));
+
     try {
       const net = await fetchNetwork(presetId);
       const traf = await fetchTraffic(presetId, params.traffic_seed);
@@ -133,7 +158,7 @@ export default function App() {
         weights,
         custom_vehicles: veh?.vehicles || [],
         fleet_size: defaultCount,
-        road_status_overrides: {},
+        road_status_overrides: presetId === 'bridge_closure' ? { 'E-H': 'CLOSED', 'H-E': 'CLOSED' } : {},
         baseline_method: baselineMethod,
         bpr_alpha: bprParams.alpha,
         bpr_beta: bprParams.beta,
@@ -281,6 +306,7 @@ export default function App() {
     };
     setSimulationConfig(demoConfig);
     setFleetSize(10);
+    setSimulationMode('map');
     setActivePage('simulation');
     
     // Trigger real optimization run with Travel Time priority
@@ -323,6 +349,8 @@ export default function App() {
           <SimulationPage
             simulationConfig={simulationConfig}
             onUpdateSimulationConfig={setSimulationConfig}
+            simulationMode={simulationMode}
+            onSetSimulationMode={setSimulationMode}
             network={network}
             traffic={traffic}
             scenarios={scenarios}

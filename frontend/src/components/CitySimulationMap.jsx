@@ -20,11 +20,15 @@ import {
   Activity,
   CheckCircle2,
   RefreshCw,
+  CloudRain,
+  Sun,
+  Wind,
+  ShieldAlert,
 } from 'lucide-react';
 
 /* =========================================================================
-   PHASE 5 — LIVE VEHICLE SIMULATION & DYNAMIC RE-ROUTING ENGINE
-   Operates directly on the exact generated transportation graph & fleet.
+   2D ILLUSTRATED SIMULATED CITY MAP ENGINE (SIH26137)
+   Supports dynamic generation from SimulationConfig AND Preset Network Graphs.
    ========================================================================= */
 
 export default function CitySimulationMap({
@@ -50,15 +54,13 @@ export default function CitySimulationMap({
   const [selectedElement, setSelectedElement] = useState(null);
   const [hoveredElement, setHoveredElement] = useState(null);
 
-  /* -------------------------------------------------------------------------
-     1. SIMULATION CLOCK & CONTROLS STATE (PHASE 5)
-     ------------------------------------------------------------------------- */
+  // Simulation Clock & Animation Controls
   const [isPlaying, setIsPlaying] = useState(false);
   const [simSpeed, setSimSpeed] = useState(2); // 1x, 2x, 4x, 8x
-  const [simSeconds, setSimSeconds] = useState(0); // Elapsed simulated seconds
+  const [simSeconds, setSimSeconds] = useState(0);
 
   /* -------------------------------------------------------------------------
-     2. DYNAMIC CITY GENERATOR (Exact Phase 2 Transportation Network)
+     1. DYNAMIC CITY GENERATOR (Custom Config OR Backend Preset Network)
      ------------------------------------------------------------------------- */
   const cityData = useMemo(() => {
     const sizeSetting = config?.roadNetwork?.size || 'Medium';
@@ -66,47 +68,118 @@ export default function CitySimulationMap({
     const oneWaySetting = config?.roadNetwork?.oneWay || 'OFF';
     const capacitySetting = config?.roadNetwork?.roadCapacity || 'Medium';
     const conditionSetting = config?.conditions?.roadCondition || 'Average';
-    const accidentsCount = config?.events?.accidents || 0;
-    const closuresCount = config?.events?.roadClosures || 0;
-    const constructionCount = config?.events?.constructionZones || 0;
+    const weatherSetting = config?.conditions?.weather || 'Normal';
+    const accidentsCount = config?.events?.accidents !== undefined ? config.events.accidents : 0;
+    const closuresCount = config?.events?.roadClosures !== undefined ? config.events.roadClosures : 0;
+    const constructionCount = config?.events?.constructionZones !== undefined ? config.events.constructionZones : 0;
 
     let baseNodes = [];
-    if (sizeSetting === 'Low') {
-      baseNodes = [
-        { id: 'A', x: 120, y: 320, name: 'Origin Terminal (A)' },
-        { id: 'B', x: 280, y: 160, name: 'North Arterial (B)' },
-        { id: 'C', x: 300, y: 460, name: 'South Transit (C)' },
-        { id: 'D', x: 480, y: 220, name: 'Central Boulevard (D)' },
-        { id: 'E', x: 500, y: 420, name: 'Midtown Hub (E)' },
-        { id: 'F', x: 680, y: 310, name: 'Destination Gateway (F)' },
-      ];
-    } else if (sizeSetting === 'High') {
-      baseNodes = [
-        { id: 'A', x: 80, y: 340, name: 'West Commercial Terminal' },
-        { id: 'B', x: 220, y: 160, name: 'North Ring Jct' },
-        { id: 'C', x: 230, y: 490, name: 'South Logistics Jct' },
-        { id: 'D', x: 380, y: 120, name: 'Cyber Park Interchange' },
-        { id: 'E', x: 410, y: 330, name: 'Central Plaza Hub' },
-        { id: 'F', x: 390, y: 530, name: 'Riverside Corridor' },
-        { id: 'G', x: 580, y: 180, name: 'Tech Gateway North' },
-        { id: 'H', x: 600, y: 460, name: 'Industrial Parkway' },
-        { id: 'I', x: 740, y: 240, name: 'Metro East Overpass' },
-        { id: 'J', x: 770, y: 440, name: 'South Harbor Arterial' },
-        { id: 'K', x: 920, y: 330, name: 'National Logistics Hub (Dest)' },
-      ];
+    let rawConnections = [];
+
+    // If backend network with >9 nodes (like 16-node smart_grid or 30-node metropolitan) is loaded:
+    if (network && network.nodes && network.nodes.length > 9) {
+      baseNodes = network.nodes.map((n) => ({
+        id: n.id,
+        x: n.x || 100,
+        y: n.y || 100,
+        name: `Junction ${n.id}`,
+      }));
+
+      rawConnections = (network.roads || []).map((r, i) => ({
+        u: r.source,
+        v: r.target,
+        lanes: r.capacity >= 10 ? 4 : (r.capacity >= 6 ? 2 : 1),
+        curve: (i % 2 === 0 ? 1 : -1) * ((i % 5) * 4),
+      }));
     } else {
-      // Default: Medium 9-Node Urban Network
-      baseNodes = [
-        { id: 'A', x: 110, y: 320, name: 'West Origin Gateway (A)' },
-        { id: 'B', x: 270, y: 170, name: 'Northwest Ring (B)' },
-        { id: 'C', x: 280, y: 470, name: 'Southwest Parkway (C)' },
-        { id: 'D', x: 440, y: 140, name: 'North Tech Boulevard (D)' },
-        { id: 'E', x: 460, y: 320, name: 'Central Urban Crossing (E)' },
-        { id: 'F', x: 450, y: 500, name: 'South Arterial (F)' },
-        { id: 'G', x: 630, y: 190, name: 'Northeast Overpass (G)' },
-        { id: 'H', x: 640, y: 450, name: 'Southeast Junction (H)' },
-        { id: 'I', x: 800, y: 320, name: 'East Destination Terminal (I)' },
-      ];
+      // Dynamic generation based on Phase 1 SimulationConfig
+      if (sizeSetting === 'Low') {
+        baseNodes = [
+          { id: 'A', x: 120, y: 320, name: 'Origin Terminal (A)' },
+          { id: 'B', x: 280, y: 160, name: 'North Arterial (B)' },
+          { id: 'C', x: 300, y: 460, name: 'South Transit (C)' },
+          { id: 'D', x: 480, y: 220, name: 'Central Boulevard (D)' },
+          { id: 'E', x: 500, y: 420, name: 'Midtown Hub (E)' },
+          { id: 'F', x: 680, y: 310, name: 'Destination Gateway (F)' },
+        ];
+        rawConnections = [
+          { u: 'A', v: 'B', lanes: 2, curve: -20 },
+          { u: 'A', v: 'C', lanes: 2, curve: 20 },
+          { u: 'B', v: 'D', lanes: 4, curve: 0 },
+          { u: 'C', v: 'E', lanes: 2, curve: 0 },
+          { u: 'D', v: 'E', lanes: 2, curve: 10 },
+          { u: 'D', v: 'F', lanes: 4, curve: -15 },
+          { u: 'E', v: 'F', lanes: 2, curve: 15 },
+        ];
+      } else if (sizeSetting === 'High') {
+        baseNodes = [
+          { id: 'A', x: 80, y: 340, name: 'West Commercial Terminal (A)' },
+          { id: 'B', x: 220, y: 160, name: 'North Ring Jct (B)' },
+          { id: 'C', x: 230, y: 490, name: 'South Logistics Jct (C)' },
+          { id: 'D', x: 380, y: 120, name: 'Cyber Park Interchange (D)' },
+          { id: 'E', x: 410, y: 330, name: 'Central Plaza Hub (E)' },
+          { id: 'F', x: 390, y: 530, name: 'Riverside Corridor (F)' },
+          { id: 'G', x: 580, y: 180, name: 'Tech Gateway North (G)' },
+          { id: 'H', x: 600, y: 460, name: 'Industrial Parkway (H)' },
+          { id: 'I', x: 740, y: 240, name: 'Metro East Overpass (I)' },
+          { id: 'J', x: 770, y: 440, name: 'South Harbor Arterial (J)' },
+          { id: 'K', x: 920, y: 330, name: 'National Logistics Hub (Dest)' },
+        ];
+        rawConnections = [
+          { u: 'A', v: 'B', lanes: 2, curve: -25 },
+          { u: 'A', v: 'C', lanes: 2, curve: 25 },
+          { u: 'A', v: 'E', lanes: 4, curve: 0 },
+          { u: 'B', v: 'D', lanes: 4, curve: -10 },
+          { u: 'B', v: 'E', lanes: 2, curve: 15 },
+          { u: 'C', v: 'E', lanes: 2, curve: -15 },
+          { u: 'C', v: 'F', lanes: 2, curve: 20 },
+          { u: 'D', v: 'G', lanes: 4, curve: 0 },
+          { u: 'E', v: 'G', lanes: 2, curve: -10 },
+          { u: 'E', v: 'H', lanes: 4, curve: 10 },
+          { u: 'F', v: 'H', lanes: 2, curve: 0 },
+          { u: 'G', v: 'I', lanes: 4, curve: -15 },
+          { u: 'H', v: 'J', lanes: 2, curve: 15 },
+          { u: 'I', v: 'K', lanes: 4, curve: -10 },
+          { u: 'J', v: 'K', lanes: 2, curve: 10 },
+          { u: 'I', v: 'J', lanes: 2, curve: 0 },
+        ];
+      } else {
+        // Medium: 9-Node Urban Network
+        baseNodes = [
+          { id: 'A', x: 110, y: 320, name: 'West Origin Gateway (A)' },
+          { id: 'B', x: 270, y: 170, name: 'Northwest Ring (B)' },
+          { id: 'C', x: 280, y: 470, name: 'Southwest Parkway (C)' },
+          { id: 'D', x: 440, y: 140, name: 'North Tech Boulevard (D)' },
+          { id: 'E', x: 460, y: 320, name: 'Central Urban Crossing (E)' },
+          { id: 'F', x: 450, y: 500, name: 'South Arterial (F)' },
+          { id: 'G', x: 630, y: 190, name: 'Northeast Overpass (G)' },
+          { id: 'H', x: 640, y: 450, name: 'Southeast Junction (H)' },
+          { id: 'I', x: 800, y: 320, name: 'East Destination Terminal (I)' },
+        ];
+        rawConnections = [
+          { u: 'A', v: 'B', lanes: 2, curve: -25 },
+          { u: 'A', v: 'C', lanes: 2, curve: 25 },
+          { u: 'A', v: 'E', lanes: 4, curve: 0 },
+          { u: 'B', v: 'D', lanes: 4, curve: -15 },
+          { u: 'B', v: 'E', lanes: 2, curve: 15 },
+          { u: 'C', v: 'E', lanes: 2, curve: -15 },
+          { u: 'C', v: 'F', lanes: 2, curve: 20 },
+          { u: 'D', v: 'G', lanes: 4, curve: -10 },
+          { u: 'D', v: 'E', lanes: 2, curve: 0 },
+          { u: 'E', v: 'G', lanes: 2, curve: -15 },
+          { u: 'E', v: 'H', lanes: 4, curve: 15 },
+          { u: 'E', v: 'F', lanes: 2, curve: 0 },
+          { u: 'F', v: 'H', lanes: 2, curve: 15 },
+          { u: 'G', v: 'I', lanes: 4, curve: -20 },
+          { u: 'H', v: 'I', lanes: 2, curve: 20 },
+          { u: 'E', v: 'I', lanes: 4, curve: 0 },
+        ];
+      }
+    }
+
+    // Filter density if 'Low'
+    if (densitySetting === 'Low' && rawConnections.length > 7) {
+      rawConnections = rawConnections.filter((_, idx) => idx % 2 === 0 || idx >= rawConnections.length - 2);
     }
 
     const nodeMap = {};
@@ -124,60 +197,9 @@ export default function CitySimulationMap({
     const height = Math.max(600, maxY - minY + padding * 2);
     const vb = `${minX - padding} ${minY - padding} ${width} ${height}`;
 
-    const rawConnections = [];
-    if (sizeSetting === 'Low') {
-      rawConnections.push(
-        { u: 'A', v: 'B', lanes: 2, curve: -20 },
-        { u: 'A', v: 'C', lanes: 2, curve: 20 },
-        { u: 'B', v: 'D', lanes: 4, curve: 0 },
-        { u: 'C', v: 'E', lanes: 2, curve: 0 },
-        { u: 'D', v: 'E', lanes: 2, curve: 10 },
-        { u: 'D', v: 'F', lanes: 4, curve: -15 },
-        { u: 'E', v: 'F', lanes: 2, curve: 15 }
-      );
-    } else if (sizeSetting === 'High') {
-      rawConnections.push(
-        { u: 'A', v: 'B', lanes: 2, curve: -25 },
-        { u: 'A', v: 'C', lanes: 2, curve: 25 },
-        { u: 'A', v: 'E', lanes: 4, curve: 0 },
-        { u: 'B', v: 'D', lanes: 4, curve: -10 },
-        { u: 'B', v: 'E', lanes: 2, curve: 15 },
-        { u: 'C', v: 'E', lanes: 2, curve: -15 },
-        { u: 'C', v: 'F', lanes: 2, curve: 20 },
-        { u: 'D', v: 'G', lanes: 4, curve: 0 },
-        { u: 'E', v: 'G', lanes: 2, curve: -10 },
-        { u: 'E', v: 'H', lanes: 4, curve: 10 },
-        { u: 'F', v: 'H', lanes: 2, curve: 0 },
-        { u: 'G', v: 'I', lanes: 4, curve: -15 },
-        { u: 'H', v: 'J', lanes: 2, curve: 15 },
-        { u: 'I', v: 'K', lanes: 4, curve: -10 },
-        { u: 'J', v: 'K', lanes: 2, curve: 10 },
-        { u: 'I', v: 'J', lanes: 2, curve: 0 }
-      );
-    } else {
-      rawConnections.push(
-        { u: 'A', v: 'B', lanes: 2, curve: -25 },
-        { u: 'A', v: 'C', lanes: 2, curve: 25 },
-        { u: 'A', v: 'E', lanes: 4, curve: 0 },
-        { u: 'B', v: 'D', lanes: 4, curve: -15 },
-        { u: 'B', v: 'E', lanes: 2, curve: 15 },
-        { u: 'C', v: 'E', lanes: 2, curve: -15 },
-        { u: 'C', v: 'F', lanes: 2, curve: 20 },
-        { u: 'D', v: 'G', lanes: 4, curve: -10 },
-        { u: 'D', v: 'E', lanes: 2, curve: 0 },
-        { u: 'E', v: 'G', lanes: 2, curve: -15 },
-        { u: 'E', v: 'H', lanes: 4, curve: 15 },
-        { u: 'E', v: 'F', lanes: 2, curve: 0 },
-        { u: 'F', v: 'H', lanes: 2, curve: 15 },
-        { u: 'G', v: 'I', lanes: 4, curve: -20 },
-        { u: 'H', v: 'I', lanes: 2, curve: 20 },
-        { u: 'E', v: 'I', lanes: 4, curve: 0 }
-      );
-    }
-
     const generatedRoads = rawConnections.map((conn, idx) => {
-      const u = nodeMap[conn.u];
-      const v = nodeMap[conn.v];
+      const u = nodeMap[conn.u] || { x: 100, y: 100 };
+      const v = nodeMap[conn.v] || { x: 200, y: 200 };
       const dx = v.x - u.x;
       const dy = v.y - u.y;
       const lengthKm = Math.round((Math.sqrt(dx * dx + dy * dy) / 75) * 10) / 10;
@@ -187,7 +209,7 @@ export default function CitySimulationMap({
       if (capacitySetting === 'High' && idx % 2 === 0) lanes = 4;
 
       const isOneWay = oneWaySetting === 'ON' && (idx % 3 === 0);
-      const condition = idx % 5 === 0 ? 'Bad' : (idx % 3 === 0 ? 'Average' : 'Good');
+      const condition = conditionSetting === 'Bad' ? 'Bad' : (conditionSetting === 'Good' ? 'Good' : (idx % 4 === 0 ? 'Bad' : 'Good'));
 
       return {
         id: `R-${conn.u}${conn.v}`,
@@ -200,7 +222,7 @@ export default function CitySimulationMap({
         isOneWay: isOneWay,
         condition: condition,
         status: 'OPEN',
-        curve: conn.curve,
+        curve: conn.curve || 0,
       };
     });
 
@@ -254,7 +276,6 @@ export default function CitySimulationMap({
         h: 30 + (idx % 4) * 8,
         type: idx % 3 === 0 ? 'tower' : (idx % 3 === 1 ? 'commercial' : 'house'),
         color: idx % 3 === 0 ? '#1e293b' : (idx % 3 === 1 ? '#0f172a' : '#334155'),
-        roofColor: idx % 3 === 0 ? '#00f0ff' : (idx % 3 === 1 ? '#0284c7' : '#38bdf8'),
       });
 
       trees.push({
@@ -262,12 +283,6 @@ export default function CitySimulationMap({
         x: midX - nx * 34 + (idx % 15) - 7,
         y: midY - ny * 34 + (idx % 15) - 7,
         r: 9 + (idx % 3) * 2,
-      });
-      trees.push({
-        id: `tree-${idx}-2`,
-        x: midX + nx * 70,
-        y: midY + ny * 70,
-        r: 8 + (idx % 2) * 2,
       });
     });
 
@@ -297,8 +312,9 @@ export default function CitySimulationMap({
       destNode: baseNodes[baseNodes.length - 1],
       centerX: (minX + maxX) / 2,
       centerY: (minY + maxY) / 2,
+      weather: weatherSetting,
     };
-  }, [config]);
+  }, [config, network]);
 
   // Bezier math helpers
   const getRoadPathData = (u, v, curve) => {
@@ -333,7 +349,6 @@ export default function CitySimulationMap({
     const x = oneMinusT * oneMinusT * u.x + 2 * oneMinusT * t * ctrlX + t * t * v.x;
     const y = oneMinusT * oneMinusT * u.y + 2 * oneMinusT * t * ctrlY + t * t * v.y;
 
-    // Tangent derivative: B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
     const tx = 2 * oneMinusT * (ctrlX - u.x) + 2 * t * (v.x - ctrlX);
     const ty = 2 * oneMinusT * (ctrlY - u.y) + 2 * t * (v.y - ctrlY);
     const angle = Math.atan2(ty, tx) * (180 / Math.PI);
@@ -342,11 +357,11 @@ export default function CitySimulationMap({
   };
 
   /* -------------------------------------------------------------------------
-     3. LIVE VEHICLE FLEET SIMULATION STATE (PHASE 5)
+     2. LIVE VEHICLE FLEET SIMULATION STATE
      ------------------------------------------------------------------------- */
   const [liveVehicles, setLiveVehicles] = useState([]);
 
-  // Initialize fleet state whenever cityData or benchmark changes
+  // Initialize fleet state
   useEffect(() => {
     const count = config?.vehicles?.count || 10;
     const vType = config?.vehicles?.type || 'Mixed';
@@ -355,7 +370,6 @@ export default function CitySimulationMap({
     const initialFleet = [];
     const qpsoRoutes = benchmark?.routes?.qpso || [];
 
-    // Candidate fallback paths from Start to Dest
     const defaultPaths = [
       ['A', 'B', 'D', 'G', 'I'],
       ['A', 'C', 'E', 'H', 'I'],
@@ -369,8 +383,8 @@ export default function CitySimulationMap({
       const type = typePool[i % typePool.length];
       const assignedRoute = qpsoRoutes[i]?.path || defaultPaths[i % defaultPaths.length];
 
-      const startU = cityData.nodeMap[assignedRoute[0]];
-      const startV = cityData.nodeMap[assignedRoute[1] || assignedRoute[0]];
+      const startU = cityData.nodeMap[assignedRoute[0]] || cityData.startNode;
+      const startV = cityData.nodeMap[assignedRoute[1] || assignedRoute[0]] || cityData.startNode;
       const road = cityData.roads.find(
         (r) => (r.source === assignedRoute[0] && r.target === assignedRoute[1]) || (r.source === assignedRoute[1] && r.target === assignedRoute[0])
       );
@@ -407,7 +421,6 @@ export default function CitySimulationMap({
       setSimSeconds((prev) => prev + (intervalMs / 1000) * simSpeed * 6);
 
       setLiveVehicles((prevFleet) => {
-        // 1. Calculate live vehicle count per road segment for congestion
         const roadLoadMap = {};
         prevFleet.forEach((v) => {
           if (!v.completed && v.path.length > v.segmentIndex + 1) {
@@ -418,7 +431,6 @@ export default function CitySimulationMap({
           }
         });
 
-        // 2. Update each vehicle's position & speed
         return prevFleet.map((veh) => {
           if (veh.completed) return { ...veh, status: 'ARRIVED' };
 
@@ -438,12 +450,9 @@ export default function CitySimulationMap({
             return { ...veh, status: 'ARRIVED', completed: true };
           }
 
-          // Check if upcoming road is CLOSED -> trigger DYNAMIC RE-ROUTING!
+          // Check for Road Closure -> Dynamic Re-routing
           if (road.status === 'CLOSED') {
-            // Find alternate open path from uId to Destination
             const destId = cityData.destNode.id;
-            const openRoads = cityData.roads.filter((r) => r.status === 'OPEN');
-            // Re-route path
             const newPath = [uId, 'E', destId];
             return {
               ...veh,
@@ -458,11 +467,11 @@ export default function CitySimulationMap({
             };
           }
 
-          // Compute Effective Speed
+          // Speed calculation
           const baseSpeed = veh.type === 'Bikes' ? 52 : (veh.type === 'Lorries' ? 36 : (veh.type === 'Vans' ? 42 : (veh.type === 'Scooters' ? 40 : 48)));
-          const weatherModifier = config?.conditions?.weather === 'Rainy' ? 0.8 : (config?.conditions?.weather === 'Windy' ? 0.9 : 1.0);
+          const weatherModifier = cityData.weather === 'Rainy' ? 0.8 : (cityData.weather === 'Windy' ? 0.9 : 1.0);
           const conditionModifier = road.condition === 'Bad' ? 0.72 : (road.condition === 'Average' ? 0.88 : 1.0);
-          
+
           const roadKey = [uId, vId].sort().join('-');
           const vehiclesOnRoad = roadLoadMap[roadKey] || 1;
           const capacityRatio = vehiclesOnRoad / (road.capacity_vehicles || 4);
@@ -471,7 +480,6 @@ export default function CitySimulationMap({
           const accidentModifier = cityData.accidents.some((a) => a.roadId === road.id) ? 0.5 : 1.0;
           const effectiveSpeed = baseSpeed * weatherModifier * conditionModifier * congestionModifier * accidentModifier;
 
-          // Progress along current road segment
           const dtHours = ((intervalMs / 1000) * simSpeed * 6) / 3600;
           const stepProgress = (effectiveSpeed * dtHours) / (road.distance_km || 1);
           let nextProgress = veh.progress + stepProgress;
@@ -486,7 +494,6 @@ export default function CitySimulationMap({
             }
           }
 
-          // Calculate new (x, y) & angle
           const curU = cityData.nodeMap[veh.path[nextSegIndex]];
           const curV = cityData.nodeMap[veh.path[nextSegIndex + 1]];
           const curRoad = cityData.roads.find(
@@ -516,13 +523,11 @@ export default function CitySimulationMap({
     }, intervalMs);
 
     return () => clearInterval(timer);
-  }, [isPlaying, simSpeed, cityData, config, simSeconds]);
+  }, [isPlaying, simSpeed, cityData, simSeconds]);
 
-  // Restart Simulation
   const handleRestartSim = () => {
     setIsPlaying(false);
     setSimSeconds(0);
-    // Trigger reset by re-evaluating initialFleet
     const count = config?.vehicles?.count || 10;
     const vType = config?.vehicles?.type || 'Mixed';
     const typePool = vType === 'Mixed' ? ['Cars', 'Bikes', 'Vans', 'Lorries', 'Scooters'] : [vType];
@@ -541,8 +546,8 @@ export default function CitySimulationMap({
       const vehId = `V-${String(i + 1).padStart(2, '0')}`;
       const type = typePool[i % typePool.length];
       const assignedRoute = qpsoRoutes[i]?.path || defaultPaths[i % defaultPaths.length];
-      const startU = cityData.nodeMap[assignedRoute[0]];
-      const startV = cityData.nodeMap[assignedRoute[1] || assignedRoute[0]];
+      const startU = cityData.nodeMap[assignedRoute[0]] || cityData.startNode;
+      const startV = cityData.nodeMap[assignedRoute[1] || assignedRoute[0]] || cityData.startNode;
       const road = cityData.roads.find(
         (r) => (r.source === assignedRoute[0] && r.target === assignedRoute[1]) || (r.source === assignedRoute[1] && r.target === assignedRoute[0])
       );
@@ -568,7 +573,6 @@ export default function CitySimulationMap({
     setLiveVehicles(resetFleet);
   };
 
-  // Clock string format (starting from Phase 1 timeOfDay e.g. 08:00 AM)
   const formattedClock = useMemo(() => {
     const baseHour = 8;
     const baseMin = 0;
@@ -580,13 +584,8 @@ export default function CitySimulationMap({
     return `${String(displayHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')} ${ampm}`;
   }, [simSeconds]);
 
-  // Aggregate Metrics
   const arrivedCount = liveVehicles.filter((v) => v.completed).length;
-  const avgTravelTimeMin = liveVehicles.length > 0
-    ? (liveVehicles.reduce((acc, v) => acc + v.travelTimeSec, 0) / liveVehicles.length / 60).toFixed(1)
-    : '0.0';
 
-  // Mouse pan & zoom handlers
   const handleMouseDown = (e) => {
     if (e.target.closest('.map-control-btn') || e.target.closest('.map-popover')) return;
     setIsDragging(true);
@@ -634,16 +633,43 @@ export default function CitySimulationMap({
         width: '100%',
         height: 'calc(100vh - 100px)',
         minHeight: 650,
-        background: 'radial-gradient(circle at 50% 50%, #061022 0%, #030712 100%)',
+        background: 'var(--map-bg)',
         borderRadius: 14,
         overflow: 'hidden',
-        boxShadow: '0 16px 50px rgba(0,0,0,0.85), 0 0 30px rgba(0, 240, 255, 0.15)',
-        border: '1px solid rgba(0, 240, 255, 0.3)',
+        boxShadow: 'var(--shadow-lg)',
+        border: '1px solid var(--border-subtle)',
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
       }}
     >
-      {/* 1. Full-Screen Interactive 2D Illustrated City SVG Canvas */}
+      {/* Dynamic Weather Overlay Banner */}
+      <div style={{
+        position: 'absolute',
+        top: 18,
+        left: 18,
+        zIndex: 20,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: 'var(--bg-surface)',
+        padding: '6px 14px',
+        borderRadius: 20,
+        border: '1px solid var(--border-subtle)',
+        backdropFilter: 'blur(10px)',
+      }}>
+        {cityData.weather === 'Rainy' && <CloudRain size={15} color="#38bdf8" />}
+        {cityData.weather === 'Sunny' && <Sun size={15} color="#fbbf24" />}
+        {cityData.weather === 'Windy' && <Wind size={15} color="#a855f7" />}
+        {cityData.weather === 'Normal' && <Compass size={15} color="#10b981" />}
+        <span style={{ fontSize: '0.78rem', color: 'var(--text-primary)', fontWeight: 700, fontFamily: 'JetBrains Mono' }}>
+          {cityData.weather.toUpperCase()} ENVIRONMENT
+        </span>
+        <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>
+          {cityData.nodes.length} JUNCTIONS
+        </span>
+      </div>
+
+      {/* Full-Screen Interactive 2D Illustrated City SVG Canvas */}
       <svg
         style={{
           width: '100%',
@@ -663,48 +689,55 @@ export default function CitySimulationMap({
             </feMerge>
           </filter>
 
-          <linearGradient id="roadAsphalt" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#1e293b" />
-            <stop offset="50%" stopColor="#0f172a" />
-            <stop offset="100%" stopColor="#1e293b" />
-          </linearGradient>
-
           <pattern id="urbanGrid" width="50" height="50" patternUnits="userSpaceOnUse">
             <path d="M 50 0 L 0 0 0 50" fill="none" stroke="rgba(0, 240, 255, 0.04)" strokeWidth="1" />
           </pattern>
         </defs>
 
-        <rect x="-1000" y="-1000" width="3000" height="3000" fill="url(#urbanGrid)" />
+        <rect x="-2000" y="-2000" width="6000" height="6000" fill="url(#urbanGrid)" />
 
-        <g transform={`translate(${cityData.centerX}, ${cityData.centerY})`}>
-          <circle cx="0" cy="0" r="360" fill="none" stroke="rgba(0, 240, 255, 0.1)" strokeWidth="1.5" strokeDasharray="16 8" />
-          <circle cx="0" cy="0" r="240" fill="none" stroke="rgba(0, 240, 255, 0.08)" strokeWidth="1" strokeDasharray="8 6" />
-        </g>
+        {/* Rain particles if weather is Rainy */}
+        {cityData.weather === 'Rainy' && (
+          <g opacity="0.25">
+            {Array.from({ length: 40 }).map((_, i) => (
+              <line
+                key={`rain-${i}`}
+                x1={(i * 45) % 1200}
+                y1={(i * 35) % 800}
+                x2={((i * 45) % 1200) - 10}
+                y2={((i * 35) % 800) + 25}
+                stroke="#38bdf8"
+                strokeWidth="1.5"
+                strokeDasharray="4 4"
+              />
+            ))}
+          </g>
+        )}
 
-        {/* --- Parks & Plazas --- */}
+        {/* Plazas & Parks */}
         {cityData.parks.map((p) => (
           <circle key={p.id} cx={p.x} cy={p.y} r={p.r} fill="rgba(16, 185, 129, 0.07)" stroke="rgba(16, 185, 129, 0.2)" strokeWidth="1.5" />
         ))}
 
-        {/* --- 2D Illustrated Urban Buildings --- */}
+        {/* Buildings */}
         {cityData.buildings.map((b) => (
           <g key={b.id}>
-            <rect x={b.x - b.w / 2 + 4} y={b.y - b.h / 2 + 4} width={b.w} height={b.h} rx="4" fill="rgba(0, 0, 0, 0.5)" />
-            <rect x={b.x - b.w / 2} y={b.y - b.h / 2} width={b.w} height={b.h} rx="4" fill={b.color} stroke="rgba(0, 240, 255, 0.25)" strokeWidth="1.2" />
-            <line x1={b.x - b.w / 2 + 5} y1={b.y} x2={b.x + b.w / 2 - 5} y2={b.y} stroke="rgba(0, 240, 255, 0.35)" strokeWidth="1" />
+            <rect x={b.x - b.w / 2 + 4} y={b.y - b.h / 2 + 4} width={b.w} height={b.h} rx="4" fill="rgba(0, 0, 0, 0.4)" />
+            <rect x={b.x - b.w / 2} y={b.y - b.h / 2} width={b.w} height={b.h} rx="4" fill="var(--bg-card)" stroke="var(--border-subtle)" strokeWidth="1.2" />
+            <line x1={b.x - b.w / 2 + 5} y1={b.y} x2={b.x + b.w / 2 - 5} y2={b.y} stroke="var(--border-subtle)" strokeWidth="1" />
           </g>
         ))}
 
-        {/* --- Trees --- */}
+        {/* Trees */}
         {cityData.trees.map((t) => (
           <g key={t.id}>
-            <circle cx={t.x + 2} cy={t.y + 2} r={t.r} fill="rgba(0, 0, 0, 0.3)" />
+            <circle cx={t.x + 2} cy={t.y + 2} r={t.r} fill="rgba(0, 0, 0, 0.25)" />
             <circle cx={t.x} cy={t.y} r={t.r} fill="#10b981" opacity="0.4" stroke="#10b981" strokeWidth="1" />
             <circle cx={t.x - 1} cy={t.y - 1} r={t.r * 0.6} fill="#34d399" opacity="0.7" />
           </g>
         ))}
 
-        {/* --- Roads Layer --- */}
+        {/* Roads Layer */}
         {cityData.roads.map((road) => {
           const u = cityData.nodeMap[road.source];
           const v = cityData.nodeMap[road.target];
@@ -732,13 +765,13 @@ export default function CitySimulationMap({
               style={{ cursor: 'pointer' }}
             >
               {/* Sidewalk border */}
-              <path d={pathD} fill="none" stroke="#475569" strokeWidth={width + 5} strokeLinecap="round" strokeLinejoin="round" />
+              <path d={pathD} fill="none" stroke="var(--road-border)" strokeWidth={width + 5} strokeLinecap="round" strokeLinejoin="round" />
 
               {/* Asphalt surface */}
               <path
                 d={pathD}
                 fill="none"
-                stroke={isClosed ? '#334155' : (road.condition === 'Bad' ? '#1a2234' : 'url(#roadAsphalt)')}
+                stroke={isClosed ? '#475569' : (road.condition === 'Bad' ? '#1e293b' : 'var(--road-asphalt)')}
                 strokeWidth={width}
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -749,14 +782,14 @@ export default function CitySimulationMap({
                 <path
                   d={pathD}
                   fill="none"
-                  stroke={road.lanes >= 4 ? '#fbbf24' : '#00f0ff'}
+                  stroke={road.lanes >= 4 ? '#fbbf24' : 'var(--road-center-dash)'}
                   strokeWidth="1.8"
                   strokeDasharray="7 5"
                   opacity="0.85"
                 />
               )}
 
-              {/* Direction arrow */}
+              {/* Direction arrow if oneWay */}
               {road.isOneWay && !isClosed && (
                 <g transform={`translate(${midPos.x}, ${midPos.y})`}>
                   <circle cx="0" cy="0" r="7" fill="rgba(0, 240, 255, 0.25)" />
@@ -775,7 +808,7 @@ export default function CitySimulationMap({
           );
         })}
 
-        {/* --- Incident Markers --- */}
+        {/* Incident Markers (Accidents, Construction) */}
         {cityData.accidents.map((acc) => {
           const road = cityData.roads.find((r) => r.id === acc.roadId);
           if (!road) return null;
@@ -801,19 +834,19 @@ export default function CitySimulationMap({
           );
         })}
 
-        {/* --- Intersections & Traffic Signals --- */}
+        {/* Junctions / Traffic Signals */}
         {cityData.nodes.map((node) => (
           <g key={`node-${node.id}`} style={{ cursor: 'pointer' }}>
-            <circle cx={node.x} cy={node.y} r="16" fill="#0b1329" stroke="#00f0ff" strokeWidth="2.5" />
+            <circle cx={node.x} cy={node.y} r="16" fill="var(--bg-card)" stroke="var(--accent-cyan)" strokeWidth="2.5" />
             <circle cx={node.x} cy={node.y} r="5" fill="#38bdf8" />
             <rect x={node.x + 10} y={node.y - 20} width="6" height="14" rx="2" fill="#1e293b" stroke="#64748b" strokeWidth="0.8" />
             <circle cx={node.x + 13} cy={node.y - 16} r="1.8" fill="#10b981" />
             <circle cx={node.x + 13} cy={node.y - 10} r="1.8" fill="#f43f5e" />
-            <text x={node.x} y={node.y - 24} fill="#00f0ff" fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="JetBrains Mono">{node.id}</text>
+            <text x={node.x} y={node.y - 24} fill="var(--accent-cyan)" fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="JetBrains Mono">{node.id}</text>
           </g>
         ))}
 
-        {/* --- 🟢 START & 🔴 DESTINATION --- */}
+        {/* Start & Destination */}
         {cityData.startNode && (
           <g transform={`translate(${cityData.startNode.x}, ${cityData.startNode.y})`}>
             <circle cx="0" cy="0" r="28" fill="rgba(16, 185, 129, 0.25)" className="animate-ping" />
@@ -830,7 +863,7 @@ export default function CitySimulationMap({
           </g>
         )}
 
-        {/* --- Active Optimized Routes Layer --- */}
+        {/* Active Optimized Routes Overlay */}
         {benchmark?.routes?.qpso && (
           <g>
             {benchmark.routes.qpso.map((vRoute, idx) => {
@@ -862,7 +895,7 @@ export default function CitySimulationMap({
           </g>
         )}
 
-        {/* --- Live Dynamic Simulated Vehicles (Phase 5) --- */}
+        {/* Live Dynamic Vehicles */}
         {liveVehicles.map((veh) => (
           <g
             key={veh.id}
@@ -878,18 +911,15 @@ export default function CitySimulationMap({
             }}
             style={{ cursor: 'pointer', transition: isPlaying ? 'none' : 'transform 0.2s ease-out' }}
           >
-            {/* Vehicle Shadow */}
             <circle cx="2" cy="2" r="11" fill="rgba(0, 0, 0, 0.4)" />
-            {/* Vehicle Body */}
             <circle
               cx="0"
               cy="0"
               r="11"
-              fill={veh.completed ? '#10b981' : (veh.status === 'SLOWING' ? '#f59e0b' : (veh.status === 'REROUTING' ? '#ec4899' : '#00f0ff'))}
+              fill={veh.completed ? '#10b981' : (veh.status === 'SLOWING' ? '#f59e0b' : (veh.status === 'REROUTING' ? '#ec4899' : 'var(--accent-cyan)'))}
               stroke="#ffffff"
               strokeWidth="2"
             />
-            {/* Vehicle Icon */}
             <text x="0" y="3.5" fill="#030712" fontSize="8" fontWeight="bold" textAnchor="middle" transform={`rotate(${-veh.angle})`}>
               {veh.type === 'Bikes' ? '🏍️' : (veh.type === 'Lorries' ? '🚚' : (veh.type === 'Vans' ? '🚐' : (veh.type === 'Scooters' ? '🛵' : '🚗')))}
             </text>
@@ -897,7 +927,7 @@ export default function CitySimulationMap({
         ))}
       </svg>
 
-      {/* 2. Minimal Floating Map Navigation Controls */}
+      {/* Floating Map Navigation Controls */}
       <div
         className="map-control-btn"
         style={{
@@ -910,21 +940,21 @@ export default function CitySimulationMap({
           zIndex: 20,
         }}
       >
-        <button onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }} title="Zoom In">
-          <ZoomIn size={17} color="#00f0ff" />
+        <button onClick={() => setZoom((z) => Math.min(3.5, z + 0.2))} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8 }} title="Zoom In">
+          <ZoomIn size={17} color="var(--accent-cyan)" />
         </button>
-        <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }} title="Zoom Out">
-          <ZoomOut size={17} color="#00f0ff" />
+        <button onClick={() => setZoom((z) => Math.max(0.4, z - 0.2))} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8 }} title="Zoom Out">
+          <ZoomOut size={17} color="var(--accent-cyan)" />
         </button>
-        <button onClick={handleResetView} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }} title="Fit / Reset View">
-          <RotateCcw size={17} color="#00f0ff" />
+        <button onClick={handleResetView} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8 }} title="Fit / Reset View">
+          <RotateCcw size={17} color="var(--accent-cyan)" />
         </button>
-        <button onClick={toggleFullscreen} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8, background: 'rgba(5, 11, 20, 0.9)', border: '1px solid #00f0ff' }} title="Toggle Fullscreen">
-          {isFullscreen ? <Minimize size={17} color="#00f0ff" /> : <Maximize size={17} color="#00f0ff" />}
+        <button onClick={toggleFullscreen} className="btn btn-secondary" style={{ padding: 9, borderRadius: 8 }} title="Toggle Fullscreen">
+          {isFullscreen ? <Minimize size={17} color="var(--accent-cyan)" /> : <Maximize size={17} color="var(--accent-cyan)" />}
         </button>
       </div>
 
-      {/* 3. Floating Live Simulation Control & Telemetry Bar (Phase 5) */}
+      {/* Floating Simulation Control Bar */}
       <div
         className="map-control-btn"
         style={{
@@ -934,18 +964,17 @@ export default function CitySimulationMap({
           transform: 'translateX(-50%)',
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
-          background: 'rgba(5, 11, 20, 0.95)',
+          gap: 10,
+          background: 'var(--bg-surface)',
           backdropFilter: 'blur(20px)',
           padding: '8px 20px',
           borderRadius: 30,
-          border: '1px solid #00f0ff',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.85), 0 0 25px rgba(0, 240, 255, 0.35)',
+          border: '1px solid var(--border-subtle)',
+          boxShadow: 'var(--shadow-lg)',
           zIndex: 20,
           flexWrap: 'wrap',
         }}
       >
-        {/* Play / Pause Toggle Button */}
         <button
           onClick={() => setIsPlaying(!isPlaying)}
           style={{
@@ -967,7 +996,6 @@ export default function CitySimulationMap({
           <span>{isPlaying ? 'PAUSE' : 'START SIMULATION'}</span>
         </button>
 
-        {/* Restart Button */}
         <button
           onClick={handleRestartSim}
           className="btn btn-secondary"
@@ -977,15 +1005,14 @@ export default function CitySimulationMap({
           <RefreshCw size={14} /> ↻ RESTART
         </button>
 
-        {/* Simulation Speed Buttons */}
-        <div style={{ display: 'flex', background: 'rgba(8, 18, 38, 0.8)', borderRadius: 16, padding: 2, border: '1px solid rgba(0, 240, 255, 0.2)' }}>
+        <div style={{ display: 'flex', background: 'var(--bg-input)', borderRadius: 16, padding: 2, border: '1px solid var(--border-subtle)' }}>
           {[1, 2, 4, 8].map((spd) => (
             <button
               key={spd}
               onClick={() => setSimSpeed(spd)}
               style={{
-                background: simSpeed === spd ? '#00f0ff' : 'transparent',
-                color: simSpeed === spd ? '#030712' : '#94a3b8',
+                background: simSpeed === spd ? 'var(--accent-cyan)' : 'transparent',
+                color: simSpeed === spd ? '#030712' : 'var(--text-secondary)',
                 border: 'none',
                 borderRadius: 14,
                 padding: '4px 9px',
@@ -999,23 +1026,20 @@ export default function CitySimulationMap({
           ))}
         </div>
 
-        {/* Live Simulation Clock */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(8, 18, 38, 0.9)', borderRadius: 12, border: '1px solid rgba(0, 240, 255, 0.2)' }}>
-          <Clock size={13} color="#00f0ff" />
-          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f8fafc', fontFamily: 'JetBrains Mono' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'var(--bg-input)', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+          <Clock size={13} color="var(--accent-cyan)" />
+          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono' }}>
             {formattedClock}
           </span>
         </div>
 
-        {/* Fleet Progress Indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'rgba(8, 18, 38, 0.9)', borderRadius: 12, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'var(--bg-input)', borderRadius: 12, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
           <CheckCircle2 size={13} color="#34d399" />
           <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700 }}>
             {arrivedCount} / {liveVehicles.length} Arrived
           </span>
         </div>
 
-        {/* Reconfigure Button */}
         {onReconfigure && (
           <button
             onClick={onReconfigure}
@@ -1027,7 +1051,7 @@ export default function CitySimulationMap({
         )}
       </div>
 
-      {/* 4. Small Contextual Tooltip Popover (Anchored to Element) */}
+      {/* Contextual Popover */}
       {selectedElement && (
         <div
           className="map-popover"
@@ -1035,49 +1059,44 @@ export default function CitySimulationMap({
             position: 'absolute',
             top: 20,
             left: 20,
-            background: 'rgba(5, 11, 20, 0.96)',
+            background: 'var(--bg-surface)',
             backdropFilter: 'blur(16px)',
-            border: '1px solid #00f0ff',
+            border: '1px solid var(--border-active)',
             borderRadius: 12,
             padding: '16px 20px',
-            boxShadow: '0 12px 35px rgba(0,0,0,0.9), 0 0 20px rgba(0, 240, 255, 0.25)',
+            boxShadow: 'var(--shadow-lg)',
             maxWidth: 300,
             zIndex: 30,
-            color: '#f8fafc',
+            color: 'var(--text-primary)',
             fontSize: '0.84rem',
           }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <strong className="font-orbitron" style={{ color: '#00f0ff', letterSpacing: '0.04em', fontSize: '0.88rem' }}>
+            <strong className="font-orbitron" style={{ color: 'var(--accent-cyan)', letterSpacing: '0.04em', fontSize: '0.88rem' }}>
               {selectedElement.type === 'road'
                 ? `ROAD ${selectedElement.data.source} ➔ ${selectedElement.data.target}`
                 : selectedElement.type === 'vehicle'
                 ? `VEHICLE ${selectedElement.data.id}`
                 : `JUNCTION ${selectedElement.data.id}`}
             </strong>
-            <button onClick={() => setSelectedElement(null)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+            <button onClick={() => setSelectedElement(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
               <X size={14} />
             </button>
           </div>
 
           {selectedElement.type === 'vehicle' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, color: '#cbd5e1' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, color: 'var(--text-secondary)' }}>
               <div>Type: <strong>{selectedElement.data.type}</strong></div>
               <div>Status: <span className={`badge ${selectedElement.data.completed ? 'badge-emerald' : (selectedElement.data.status === 'REROUTING' ? 'badge-rose' : 'badge-cyan')}`}>{selectedElement.data.status}</span></div>
               <div>Live Speed: <strong>{selectedElement.data.speedKmph} km/h</strong></div>
-              <div>Elapsed Travel Time: <strong style={{ color: '#00f0ff' }}>{(selectedElement.data.travelTimeSec / 60).toFixed(1)} min</strong></div>
+              <div>Elapsed Travel Time: <strong style={{ color: 'var(--accent-cyan)' }}>{(selectedElement.data.travelTimeSec / 60).toFixed(1)} min</strong></div>
               <div>Distance Covered: <strong>{selectedElement.data.distanceTravelledKm.toFixed(1)} km</strong></div>
               <div>Assigned Path: <strong style={{ color: '#34d399' }}>{selectedElement.data.path.join(' ➔ ')}</strong></div>
-              {selectedElement.data.rerouteEvents.length > 0 && (
-                <div style={{ marginTop: 4, padding: '4px 8px', background: 'rgba(244, 63, 94, 0.15)', borderRadius: 4, border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fb7185', fontSize: '0.74rem' }}>
-                  ⚠ Dynamic Re-route: {selectedElement.data.rerouteEvents[0].reason}
-                </div>
-              )}
             </div>
           )}
 
           {selectedElement.type === 'road' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, color: '#cbd5e1' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, color: 'var(--text-secondary)' }}>
               <div>Length: <strong>{selectedElement.data.distance_km} km</strong></div>
               <div>Lanes: <strong>{selectedElement.data.lanes} Lanes</strong></div>
               <div>Capacity: <strong>{selectedElement.data.capacity_vehicles} veh</strong></div>
