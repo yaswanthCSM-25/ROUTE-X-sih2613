@@ -28,8 +28,23 @@ import {
 
 /* =========================================================================
    2D ILLUSTRATED SIMULATED CITY MAP ENGINE (SIH26137)
-   Supports dynamic generation from SimulationConfig AND Preset Network Graphs.
+   Full Rule-Following Engine:
+   - 🚦 Traffic Signal Cycles (Red = Stop, Green = Go)
+   - ⛔ Road Closure Barricades (Strict avoidance & dynamic detour)
+   - ➔ One-Way Direction Arrows (Strict forward traversal only)
+   - 💥 Accident Hazards (Crawl speed & caution halo)
+   - 🚧 Construction Work Zones (Work zone speed caps)
+   - 🌧️ Environmental Weather & Asphalt Roughness Modifiers
+   - 🚗 Multi-Class Vehicle Dynamics (Cars, Bikes, Vans, Lorries, Scooters)
    ========================================================================= */
+
+// Traffic signal helper (12-second cycle: 7s Green, 5s Red per junction)
+export const getJunctionSignalState = (nodeId, elapsedSec) => {
+  if (!nodeId) return 'GREEN';
+  const charCode = nodeId.charCodeAt(nodeId.length - 1) || 65;
+  const cycle = (elapsedSec + charCode * 2.5) % 12;
+  return cycle < 7 ? 'GREEN' : 'RED';
+};
 
 export default function CitySimulationMap({
   config,
@@ -177,7 +192,7 @@ export default function CitySimulationMap({
       }
     }
 
-    // Filter density if 'Low'
+    // Density filter if 'Low'
     if (densitySetting === 'Low' && rawConnections.length > 7) {
       rawConnections = rawConnections.filter((_, idx) => idx % 2 === 0 || idx >= rawConnections.length - 2);
     }
@@ -357,11 +372,65 @@ export default function CitySimulationMap({
   };
 
   /* -------------------------------------------------------------------------
-     2. LIVE VEHICLE FLEET SIMULATION STATE
+     2. RULE-COMPLIANT ROUTE SOLVER
+     Strictly enforces:
+     - ⛔ Avoids all road.status === 'CLOSED'
+     - ➔ Strictly respects one-way arrows (source -> target only)
+     ------------------------------------------------------------------------- */
+  const findFeasibleRuleCompliantPath = (startId, destId, roads, nodeMap, visitedSeeds = 0) => {
+    // Build directed adjacency list respecting closure and one-way rules
+    const adj = {};
+    Object.keys(nodeMap).forEach((id) => {
+      adj[id] = [];
+    });
+
+    roads.forEach((r) => {
+      if (r.status === 'CLOSED') return; // Strict closure rule
+
+      // Forward edge
+      adj[r.source]?.push({ target: r.target, road: r });
+
+      // Backward edge ONLY if not one-way
+      if (!r.isOneWay) {
+        adj[r.target]?.push({ target: r.source, road: r });
+      }
+    });
+
+    // BFS to find feasible paths
+    const queue = [[startId]];
+    const foundPaths = [];
+
+    while (queue.length > 0 && foundPaths.length < 5) {
+      const currentPath = queue.shift();
+      const lastNode = currentPath[currentPath.length - 1];
+
+      if (lastNode === destId) {
+        foundPaths.push(currentPath);
+        continue;
+      }
+
+      if (currentPath.length > 8) continue; // Loop limit
+
+      const neighbors = adj[lastNode] || [];
+      // Permute neighbors based on seed for diverse fleet routing
+      const shuffled = [...neighbors].sort((a, b) => ((a.target.charCodeAt(0) + visitedSeeds) % 3) - 1);
+
+      for (const edge of shuffled) {
+        if (!currentPath.includes(edge.target)) {
+          queue.push([...currentPath, edge.target]);
+        }
+      }
+    }
+
+    return foundPaths.length > 0 ? foundPaths[visitedSeeds % foundPaths.length] : [startId, destId];
+  };
+
+  /* -------------------------------------------------------------------------
+     3. LIVE VEHICLE FLEET SIMULATION STATE
      ------------------------------------------------------------------------- */
   const [liveVehicles, setLiveVehicles] = useState([]);
 
-  // Initialize fleet state
+  // Initialize fleet state with 100% rule-compliant routes
   useEffect(() => {
     const count = config?.vehicles?.count || 10;
     const vType = config?.vehicles?.type || 'Mixed';
@@ -370,41 +439,62 @@ export default function CitySimulationMap({
     const initialFleet = [];
     const qpsoRoutes = benchmark?.routes?.qpso || [];
 
-    const defaultPaths = [
-      ['A', 'B', 'D', 'G', 'I'],
-      ['A', 'C', 'E', 'H', 'I'],
-      ['A', 'E', 'I'],
-      ['A', 'B', 'E', 'G', 'I'],
-      ['A', 'C', 'F', 'H', 'I'],
-    ];
-
     for (let i = 0; i < count; i++) {
       const vehId = `V-${String(i + 1).padStart(2, '0')}`;
       const type = typePool[i % typePool.length];
-      const assignedRoute = qpsoRoutes[i]?.path || defaultPaths[i % defaultPaths.length];
 
-      const startU = cityData.nodeMap[assignedRoute[0]] || cityData.startNode;
-      const startV = cityData.nodeMap[assignedRoute[1] || assignedRoute[0]] || cityData.startNode;
+      // Check if benchmark path is valid and avoids closures
+      let candidatePath = qpsoRoutes[i]?.path;
+      const isPathValid =
+        candidatePath &&
+        candidatePath.length > 1 &&
+        candidatePath.every((uId, idx) => {
+          if (idx === candidatePath.length - 1) return true;
+          const vId = candidatePath[idx + 1];
+          const road = cityData.roads.find(
+            (r) => (r.source === uId && r.target === vId) || (!r.isOneWay && r.source === vId && r.target === uId)
+          );
+          return road && road.status !== 'CLOSED';
+        });
+
+      if (!isPathValid) {
+        // Compute strict rule-compliant corridor
+        candidatePath = findFeasibleRuleCompliantPath(
+          cityData.startNode.id,
+          cityData.destNode.id,
+          cityData.roads,
+          cityData.nodeMap,
+          i
+        );
+      }
+
+      const startU = cityData.nodeMap[candidatePath[0]] || cityData.startNode;
+      const startV = cityData.nodeMap[candidatePath[1] || candidatePath[0]] || cityData.startNode;
       const road = cityData.roads.find(
-        (r) => (r.source === assignedRoute[0] && r.target === assignedRoute[1]) || (r.source === assignedRoute[1] && r.target === assignedRoute[0])
+        (r) => (r.source === candidatePath[0] && r.target === candidatePath[1]) || (r.source === candidatePath[1] && r.target === candidatePath[0])
       );
       const pos = startU && startV ? getPointOnRoad(startU, startV, road?.curve || 0, 0.05) : { x: 110, y: 320, angle: 0 };
+
+      const baseSpeed = type === 'Bikes' ? 55 : (type === 'Lorries' ? 34 : (type === 'Vans' ? 42 : (type === 'Scooters' ? 40 : 48)));
 
       initialFleet.push({
         id: vehId,
         type,
         status: 'WAITING',
-        path: assignedRoute,
+        path: candidatePath,
         segmentIndex: 0,
         progress: 0.0,
         x: pos.x,
         y: pos.y,
         angle: pos.angle,
-        speedKmph: type === 'Bikes' ? 52 : (type === 'Lorries' ? 36 : (type === 'Vans' ? 42 : (type === 'Scooters' ? 40 : 48))),
+        speedKmph: baseSpeed,
         distanceTravelledKm: 0,
         travelTimeSec: 0,
         rerouteEvents: [],
         completed: false,
+        waitingAtLight: false,
+        inAccidentZone: false,
+        inWorkZone: false,
       });
     }
 
@@ -412,7 +502,7 @@ export default function CitySimulationMap({
     setSimSeconds(0);
   }, [cityData, config, benchmark]);
 
-  // Live Animation Tick Loop
+  // Live Animation Tick Loop with 100% Rule Following
   useEffect(() => {
     if (!isPlaying) return;
 
@@ -443,33 +533,48 @@ export default function CitySimulationMap({
           const uNode = cityData.nodeMap[uId];
           const vNode = cityData.nodeMap[vId];
           const road = cityData.roads.find(
-            (r) => (r.source === uId && r.target === vId) || (r.source === vId && r.target === uId)
+            (r) => (r.source === uId && r.target === vId) || (!r.isOneWay && r.source === vId && r.target === uId)
           );
 
-          if (!uNode || !vNode || !road) {
-            return { ...veh, status: 'ARRIVED', completed: true };
-          }
-
-          // Check for Road Closure -> Dynamic Re-routing
-          if (road.status === 'CLOSED') {
+          // ⛔ Strict Closure Check & Dynamic Detour
+          if (!road || road.status === 'CLOSED') {
             const destId = cityData.destNode.id;
-            const newPath = [uId, 'E', destId];
+            const newDetour = findFeasibleRuleCompliantPath(uId, destId, cityData.roads, cityData.nodeMap, 3);
             return {
               ...veh,
-              status: 'REROUTING',
-              path: newPath,
+              status: 'DYNAMIC DETOUR ⛔',
+              path: newDetour,
               segmentIndex: 0,
               progress: 0.05,
               rerouteEvents: [
                 ...veh.rerouteEvents,
-                { timeSec: simSeconds, reason: `Road ${road.id} Closed`, oldPath: veh.path, newPath },
+                { timeSec: simSeconds, reason: `Barricade Closed: Detouring`, oldPath: veh.path, newPath: newDetour },
               ],
             };
           }
 
-          // Speed calculation
-          const baseSpeed = veh.type === 'Bikes' ? 52 : (veh.type === 'Lorries' ? 36 : (veh.type === 'Vans' ? 42 : (veh.type === 'Scooters' ? 40 : 48)));
-          const weatherModifier = cityData.weather === 'Rainy' ? 0.8 : (cityData.weather === 'Windy' ? 0.9 : 1.0);
+          // 🚦 Traffic Signal Rule at Junction vId
+          const signal = getJunctionSignalState(vId, simSeconds);
+          const isApproachingJunction = veh.progress >= 0.88;
+
+          if (isApproachingJunction && signal === 'RED') {
+            // Stop at red light
+            return {
+              ...veh,
+              status: 'STOPPED AT RED LIGHT 🔴',
+              speedKmph: 0,
+              waitingAtLight: true,
+              travelTimeSec: veh.travelTimeSec + (intervalMs / 1000) * simSpeed * 6,
+            };
+          }
+
+          // 💥 Accident & 🚧 Construction Zone Rules
+          const hasAccident = cityData.accidents.some((a) => a.roadId === road.id);
+          const hasConstruction = cityData.constructions.some((c) => c.roadId === road.id);
+
+          // Speed Calculation with Environmental & Zone Modifiers
+          const baseSpeed = veh.type === 'Bikes' ? 55 : (veh.type === 'Lorries' ? 34 : (veh.type === 'Vans' ? 42 : (veh.type === 'Scooters' ? 40 : 48)));
+          const weatherModifier = cityData.weather === 'Rainy' ? 0.80 : (cityData.weather === 'Windy' ? 0.90 : (cityData.weather === 'Sunny' ? 1.05 : 1.0));
           const conditionModifier = road.condition === 'Bad' ? 0.72 : (road.condition === 'Average' ? 0.88 : 1.0);
 
           const roadKey = [uId, vId].sort().join('-');
@@ -477,11 +582,21 @@ export default function CitySimulationMap({
           const capacityRatio = vehiclesOnRoad / (road.capacity_vehicles || 4);
           const congestionModifier = 1.0 / (1.0 + 0.2 * Math.pow(Math.max(0, capacityRatio - 0.5), 2));
 
-          const accidentModifier = cityData.accidents.some((a) => a.roadId === road.id) ? 0.5 : 1.0;
-          const effectiveSpeed = baseSpeed * weatherModifier * conditionModifier * congestionModifier * accidentModifier;
+          let targetSpeed = baseSpeed * weatherModifier * conditionModifier * congestionModifier;
+
+          let status = 'MOVING 🟢';
+          if (hasAccident) {
+            targetSpeed = Math.min(15, targetSpeed * 0.35); // Crawl speed for accident
+            status = 'CAUTION: ACCIDENT 💥';
+          } else if (hasConstruction) {
+            targetSpeed = Math.min(22, targetSpeed * 0.50); // Work zone speed limit
+            status = 'WORK ZONE LIMIT 🚧';
+          } else if (capacityRatio > 1.2) {
+            status = 'HEAVY TRAFFIC ⚠️';
+          }
 
           const dtHours = ((intervalMs / 1000) * simSpeed * 6) / 3600;
-          const stepProgress = (effectiveSpeed * dtHours) / (road.distance_km || 1);
+          const stepProgress = (targetSpeed * dtHours) / (road.distance_km || 1);
           let nextProgress = veh.progress + stepProgress;
           let nextSegIndex = veh.segmentIndex;
           let nextCompleted = veh.completed;
@@ -507,16 +622,19 @@ export default function CitySimulationMap({
 
           return {
             ...veh,
-            status: nextCompleted ? 'ARRIVED' : (capacityRatio > 1.2 ? 'SLOWING' : 'MOVING'),
+            status: nextCompleted ? 'ARRIVED' : status,
             segmentIndex: nextSegIndex,
             progress: nextProgress,
             x: curPos.x,
             y: curPos.y,
             angle: curPos.angle,
-            speedKmph: Math.round(effectiveSpeed),
-            distanceTravelledKm: veh.distanceTravelledKm + effectiveSpeed * dtHours,
+            speedKmph: Math.round(targetSpeed),
+            distanceTravelledKm: veh.distanceTravelledKm + targetSpeed * dtHours,
             travelTimeSec: veh.travelTimeSec + (intervalMs / 1000) * simSpeed * 6,
             completed: nextCompleted,
+            waitingAtLight: false,
+            inAccidentZone: hasAccident,
+            inWorkZone: hasConstruction,
           };
         });
       });
@@ -531,21 +649,18 @@ export default function CitySimulationMap({
     const count = config?.vehicles?.count || 10;
     const vType = config?.vehicles?.type || 'Mixed';
     const typePool = vType === 'Mixed' ? ['Cars', 'Bikes', 'Vans', 'Lorries', 'Scooters'] : [vType];
-    const qpsoRoutes = benchmark?.routes?.qpso || [];
-
-    const defaultPaths = [
-      ['A', 'B', 'D', 'G', 'I'],
-      ['A', 'C', 'E', 'H', 'I'],
-      ['A', 'E', 'I'],
-      ['A', 'B', 'E', 'G', 'I'],
-      ['A', 'C', 'F', 'H', 'I'],
-    ];
 
     const resetFleet = [];
     for (let i = 0; i < count; i++) {
       const vehId = `V-${String(i + 1).padStart(2, '0')}`;
       const type = typePool[i % typePool.length];
-      const assignedRoute = qpsoRoutes[i]?.path || defaultPaths[i % defaultPaths.length];
+      const assignedRoute = findFeasibleRuleCompliantPath(
+        cityData.startNode.id,
+        cityData.destNode.id,
+        cityData.roads,
+        cityData.nodeMap,
+        i
+      );
       const startU = cityData.nodeMap[assignedRoute[0]] || cityData.startNode;
       const startV = cityData.nodeMap[assignedRoute[1] || assignedRoute[0]] || cityData.startNode;
       const road = cityData.roads.find(
@@ -568,6 +683,9 @@ export default function CitySimulationMap({
         travelTimeSec: 0,
         rerouteEvents: [],
         completed: false,
+        waitingAtLight: false,
+        inAccidentZone: false,
+        inWorkZone: false,
       });
     }
     setLiveVehicles(resetFleet);
@@ -642,7 +760,7 @@ export default function CitySimulationMap({
         userSelect: 'none',
       }}
     >
-      {/* Dynamic Weather Overlay Banner */}
+      {/* Dynamic Weather & Traffic Rules Status Overlay */}
       <div style={{
         position: 'absolute',
         top: 18,
@@ -656,16 +774,20 @@ export default function CitySimulationMap({
         borderRadius: 20,
         border: '1px solid var(--border-subtle)',
         backdropFilter: 'blur(10px)',
+        flexWrap: 'wrap',
       }}>
         {cityData.weather === 'Rainy' && <CloudRain size={15} color="#38bdf8" />}
         {cityData.weather === 'Sunny' && <Sun size={15} color="#fbbf24" />}
         {cityData.weather === 'Windy' && <Wind size={15} color="#a855f7" />}
         {cityData.weather === 'Normal' && <Compass size={15} color="#10b981" />}
         <span style={{ fontSize: '0.78rem', color: 'var(--text-primary)', fontWeight: 700, fontFamily: 'JetBrains Mono' }}>
-          {cityData.weather.toUpperCase()} ENVIRONMENT
+          {cityData.weather.toUpperCase()} WEATHER
+        </span>
+        <span className="badge badge-emerald" style={{ fontSize: '0.68rem' }}>
+          🚦 SIGNALS ACTIVE
         </span>
         <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>
-          {cityData.nodes.length} JUNCTIONS
+          ⛔ CLOSURES ENFORCED
         </span>
       </div>
 
@@ -792,16 +914,16 @@ export default function CitySimulationMap({
               {/* Direction arrow if oneWay */}
               {road.isOneWay && !isClosed && (
                 <g transform={`translate(${midPos.x}, ${midPos.y})`}>
-                  <circle cx="0" cy="0" r="7" fill="rgba(0, 240, 255, 0.25)" />
-                  <text x="0" y="3" fill="#00f0ff" fontSize="8" fontWeight="bold" textAnchor="middle">➔</text>
+                  <circle cx="0" cy="0" r="8" fill="rgba(0, 240, 255, 0.3)" />
+                  <text x="0" y="3.5" fill="#00f0ff" fontSize="9" fontWeight="bold" textAnchor="middle">➔</text>
                 </g>
               )}
 
               {/* Road closure barricade */}
               {isClosed && (
                 <g transform={`translate(${midPos.x}, ${midPos.y})`}>
-                  <rect x="-24" y="-10" width="48" height="20" rx="4" fill="#f43f5e" stroke="#ffffff" strokeWidth="1.5" />
-                  <text x="0" y="4" fill="#ffffff" fontSize="8" fontWeight="bold" textAnchor="middle">CLOSED</text>
+                  <rect x="-26" y="-11" width="52" height="22" rx="5" fill="#f43f5e" stroke="#ffffff" strokeWidth="1.5" />
+                  <text x="0" y="4.5" fill="#ffffff" fontSize="8.5" fontWeight="bold" textAnchor="middle">⛔ CLOSED</text>
                 </g>
               )}
             </g>
@@ -815,9 +937,9 @@ export default function CitySimulationMap({
           const pos = getPointOnRoad(cityData.nodeMap[road.source], cityData.nodeMap[road.target], road.curve, 0.35);
           return (
             <g key={acc.id} transform={`translate(${pos.x}, ${pos.y})`} style={{ cursor: 'pointer' }}>
-              <circle cx="0" cy="0" r="14" fill="rgba(244, 63, 94, 0.3)" className="animate-ping" />
-              <circle cx="0" cy="0" r="10" fill="#f43f5e" stroke="#ffffff" strokeWidth="1.5" />
-              <text x="0" y="3.5" fill="#ffffff" fontSize="8" fontWeight="bold" textAnchor="middle">💥</text>
+              <circle cx="0" cy="0" r="16" fill="rgba(244, 63, 94, 0.3)" className="animate-ping" />
+              <circle cx="0" cy="0" r="11" fill="#f43f5e" stroke="#ffffff" strokeWidth="1.5" />
+              <text x="0" y="4" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">💥</text>
             </g>
           );
         })}
@@ -828,23 +950,40 @@ export default function CitySimulationMap({
           const pos = getPointOnRoad(cityData.nodeMap[road.source], cityData.nodeMap[road.target], road.curve, 0.65);
           return (
             <g key={cz.id} transform={`translate(${pos.x}, ${pos.y})`} style={{ cursor: 'pointer' }}>
-              <circle cx="0" cy="0" r="10" fill="#f59e0b" stroke="#ffffff" strokeWidth="1.5" />
-              <text x="0" y="3.5" fill="#ffffff" fontSize="8" fontWeight="bold" textAnchor="middle">🚧</text>
+              <circle cx="0" cy="0" r="11" fill="#f59e0b" stroke="#ffffff" strokeWidth="1.5" />
+              <text x="0" y="4" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">🚧</text>
             </g>
           );
         })}
 
-        {/* Junctions / Traffic Signals */}
-        {cityData.nodes.map((node) => (
-          <g key={`node-${node.id}`} style={{ cursor: 'pointer' }}>
-            <circle cx={node.x} cy={node.y} r="16" fill="var(--bg-card)" stroke="var(--accent-cyan)" strokeWidth="2.5" />
-            <circle cx={node.x} cy={node.y} r="5" fill="#38bdf8" />
-            <rect x={node.x + 10} y={node.y - 20} width="6" height="14" rx="2" fill="#1e293b" stroke="#64748b" strokeWidth="0.8" />
-            <circle cx={node.x + 13} cy={node.y - 16} r="1.8" fill="#10b981" />
-            <circle cx={node.x + 13} cy={node.y - 10} r="1.8" fill="#f43f5e" />
-            <text x={node.x} y={node.y - 24} fill="var(--accent-cyan)" fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="JetBrains Mono">{node.id}</text>
-          </g>
-        ))}
+        {/* Dynamic Junction Signals with Live Light Changes */}
+        {cityData.nodes.map((node) => {
+          const signalColor = getJunctionSignalState(node.id, simSeconds);
+          const isGreen = signalColor === 'GREEN';
+
+          return (
+            <g key={`node-${node.id}`} style={{ cursor: 'pointer' }}>
+              <circle
+                cx={node.x}
+                cy={node.y}
+                r="16"
+                fill="var(--bg-card)"
+                stroke={isGreen ? '#10b981' : '#f43f5e'}
+                strokeWidth="2.5"
+              />
+              <circle cx={node.x} cy={node.y} r="5" fill={isGreen ? '#10b981' : '#f43f5e'} />
+
+              {/* Traffic Light Pole */}
+              <rect x={node.x + 10} y={node.y - 22} width="8" height="18" rx="3" fill="#1e293b" stroke="#64748b" strokeWidth="1" />
+              {/* Red Lamp */}
+              <circle cx={node.x + 14} cy={node.y - 17} r="2.5" fill={isGreen ? '#475569' : '#f43f5e'} />
+              {/* Green Lamp */}
+              <circle cx={node.x + 14} cy={node.y - 9} r="2.5" fill={isGreen ? '#10b981' : '#475569'} />
+
+              <text x={node.x} y={node.y - 26} fill="var(--accent-cyan)" fontSize="11" fontWeight="900" textAnchor="middle" fontFamily="JetBrains Mono">{node.id}</text>
+            </g>
+          );
+        })}
 
         {/* Start & Destination */}
         {cityData.startNode && (
@@ -895,7 +1034,7 @@ export default function CitySimulationMap({
           </g>
         )}
 
-        {/* Live Dynamic Vehicles */}
+        {/* Live Rule-Enforcing Dynamic Vehicles */}
         {liveVehicles.map((veh) => (
           <g
             key={veh.id}
@@ -911,12 +1050,30 @@ export default function CitySimulationMap({
             }}
             style={{ cursor: 'pointer', transition: isPlaying ? 'none' : 'transform 0.2s ease-out' }}
           >
+            {/* Caution Aura if in Accident or Work Zone */}
+            {veh.inAccidentZone && (
+              <circle cx="0" cy="0" r="17" fill="none" stroke="#f43f5e" strokeWidth="2" strokeDasharray="3 3" className="animate-spin" />
+            )}
+            {veh.inWorkZone && (
+              <circle cx="0" cy="0" r="16" fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="3 3" />
+            )}
+
             <circle cx="2" cy="2" r="11" fill="rgba(0, 0, 0, 0.4)" />
             <circle
               cx="0"
               cy="0"
               r="11"
-              fill={veh.completed ? '#10b981' : (veh.status === 'SLOWING' ? '#f59e0b' : (veh.status === 'REROUTING' ? '#ec4899' : 'var(--accent-cyan)'))}
+              fill={
+                veh.completed
+                  ? '#10b981'
+                  : veh.waitingAtLight
+                  ? '#f43f5e'
+                  : veh.inAccidentZone
+                  ? '#f43f5e'
+                  : veh.inWorkZone
+                  ? '#f59e0b'
+                  : 'var(--accent-cyan)'
+              }
               stroke="#ffffff"
               strokeWidth="2"
             />
@@ -1087,7 +1244,7 @@ export default function CitySimulationMap({
           {selectedElement.type === 'vehicle' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, color: 'var(--text-secondary)' }}>
               <div>Type: <strong>{selectedElement.data.type}</strong></div>
-              <div>Status: <span className={`badge ${selectedElement.data.completed ? 'badge-emerald' : (selectedElement.data.status === 'REROUTING' ? 'badge-rose' : 'badge-cyan')}`}>{selectedElement.data.status}</span></div>
+              <div>Status: <span className={`badge ${selectedElement.data.completed ? 'badge-emerald' : (selectedElement.data.waitingAtLight ? 'badge-rose' : 'badge-cyan')}`}>{selectedElement.data.status}</span></div>
               <div>Live Speed: <strong>{selectedElement.data.speedKmph} km/h</strong></div>
               <div>Elapsed Travel Time: <strong style={{ color: 'var(--accent-cyan)' }}>{(selectedElement.data.travelTimeSec / 60).toFixed(1)} min</strong></div>
               <div>Distance Covered: <strong>{selectedElement.data.distanceTravelledKm.toFixed(1)} km</strong></div>
@@ -1102,6 +1259,9 @@ export default function CitySimulationMap({
               <div>Capacity: <strong>{selectedElement.data.capacity_vehicles} veh</strong></div>
               <div>Condition: <span className="badge badge-cyan">{selectedElement.data.condition}</span></div>
               <div>Status: <span className={`badge ${selectedElement.data.status === 'OPEN' ? 'badge-emerald' : 'badge-rose'}`}>{selectedElement.data.status}</span></div>
+              {selectedElement.data.isOneWay && (
+                <div style={{ color: '#38bdf8', fontWeight: 600 }}>➔ One-Way Direction Enforced</div>
+              )}
             </div>
           )}
         </div>

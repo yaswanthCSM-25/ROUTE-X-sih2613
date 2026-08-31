@@ -17,7 +17,7 @@
     "invalid_routes": 0,
     "valid_rate_pct": 100.0,
     "capacity_violations": [],
-    "runtime_sec": 0.0255
+    "runtime_sec": 0.0192
   },
   "qpso": {
     "method": "qpso",
@@ -37,7 +37,7 @@
     "invalid_routes": 0,
     "valid_rate_pct": 100.0,
     "capacity_violations": [],
-    "runtime_sec": 5.0417,
+    "runtime_sec": 3.3441,
     "particles": 20,
     "iterations": 30
   },
