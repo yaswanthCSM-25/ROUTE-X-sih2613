@@ -122,3 +122,13 @@ export async function runBatchBenchmark(payload) {
 
   return await res.json();
 }
+
+export async function fetchScalabilityBenchmark(seed = 42) {
+  const res = await fetch(`${API_BASE}/benchmark/scalability?seed=${seed}`);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Scalability benchmark error: ${errorText}`);
+  }
+  return await res.json();
+}
+
