@@ -106,79 +106,19 @@ export default function Header({
           </div>
         </div>
 
-        {/* Right Section: Scenario Switcher, Demo Mode, Theme Toggle & API Status */}
+        {/* Right Section: Theme Toggle & API Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          {/* Quick 1-Click SIH Demo Mode Button */}
-          {onLaunchDemoMode && (
-            <button
-              onClick={onLaunchDemoMode}
-              style={{
-                background: 'linear-gradient(135deg, #ff8500 0%, #ff6b00 100%)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: 8,
-                padding: '6px 14px',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 0 15px rgba(255, 107, 0, 0.4)',
-                letterSpacing: '0.03em',
-              }}
-              title="Launch instant pre-configured SIH Demonstration Scenario"
-            >
-              <Play size={13} /> 🎬 DEMO MODE
-            </button>
-          )}
-
-          {/* Scenario Preset Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.7rem', color: 'var(--accent-cyan)', fontWeight: 700, fontFamily: 'JetBrains Mono' }}>
-              SCENARIO:
-            </span>
-            <div style={{
-              display: 'flex',
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 8,
-              padding: 2,
-              gap: 2,
-            }}>
-              {(scenarios || []).map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => onSelectPreset(s.id)}
-                  style={{
-                    background: currentPreset === s.id ? 'var(--accent-cyan)' : 'transparent',
-                    border: 'none',
-                    color: currentPreset === s.id ? '#030712' : 'var(--text-secondary)',
-                    padding: '4px 9px',
-                    borderRadius: 6,
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                  }}
-                >
-                  {s.name?.replace(' Demo', '')}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Dark / Light Mode Toggle Button */}
           {onToggleTheme && (
             <button
               onClick={onToggleTheme}
               className="btn btn-secondary"
               style={{
-                padding: '6px 10px',
+                padding: '6px 12px',
                 borderRadius: 8,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 5,
+                gap: 6,
                 fontSize: '0.76rem',
                 cursor: 'pointer',
               }}
@@ -195,7 +135,7 @@ export default function Header({
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '5px 12px',
+            padding: '6px 14px',
             background: 'var(--bg-input)',
             border: backendOnline ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(244, 63, 94, 0.4)',
             borderRadius: 20,

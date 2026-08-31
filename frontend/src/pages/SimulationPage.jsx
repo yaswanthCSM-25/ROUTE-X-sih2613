@@ -12,6 +12,7 @@ export default function SimulationPage({
   scenarios,
   currentPreset,
   onSelectPreset,
+  onLaunchDemoMode,
   onToggleRoadStatus,
   onInjectIncident,
   onClearIncidents,
@@ -56,19 +57,26 @@ export default function SimulationPage({
   return (
     <div style={{ width: '100%', minHeight: '80vh' }}>
       {simulationMode === 'setup' ? (
-        /* Phase 1: Simulation Setup & 6 Configuration Sections */
+        /* Phase 1: Simulation Setup & 6 Configuration Sections with Scenarios & Demo Buttons */
         <SimulationControlCenter
           onSimulate={handleSimulate}
+          scenarios={scenarios}
+          currentPreset={currentPreset}
+          onSelectPreset={onSelectPreset}
+          onLaunchDemoMode={onLaunchDemoMode}
           isLoading={isLoading}
         />
       ) : (
-        /* Phase 2: Full-Screen Interactive 2D Illustrated City Map with Integrated Dynamic Incidents */
+        /* Phase 2: Full-Screen Interactive 2D Illustrated City Map with Scenarios & Demo Buttons */
         <CitySimulationMap
           config={simulationConfig}
           network={network}
           traffic={traffic}
           vehicles={vehicles}
+          scenarios={scenarios}
           currentPreset={currentPreset}
+          onSelectPreset={onSelectPreset}
+          onLaunchDemoMode={onLaunchDemoMode}
           onInjectIncident={onInjectIncident}
           onClearIncidents={onClearIncidents}
           incidentResult={incidentResult}

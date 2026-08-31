@@ -356,6 +356,7 @@ export default function App() {
             scenarios={scenarios}
             currentPreset={currentPreset}
             onSelectPreset={loadScenario}
+            onLaunchDemoMode={handleLaunchDemoMode}
             onToggleRoadStatus={handleToggleRoadStatus}
             onInjectIncident={handleInjectIncident}
             onClearIncidents={handleClearIncidents}
