@@ -60,6 +60,16 @@ export default function App() {
     beta: 4.0,
   });
 
+  // Simulation Configuration (Phase 1 -> Phase 2 -> Phase 3)
+  const [simulationConfig, setSimulationConfig] = useState({
+    vehicles: { count: 10, type: 'Mixed' },
+    roadNetwork: { size: 'Medium', density: 'Medium', oneWay: 'OFF', junctions: 'Medium', roadCapacity: 'Medium' },
+    traffic: { level: 'Medium', pattern: 'Random', timeOfDay: '08:00 AM' },
+    conditions: { weather: 'Normal', roadCondition: 'Average' },
+    events: { accidents: 0, roadClosures: 0, constructionZones: 0 },
+    optimization: { priority: 'Balanced' },
+  });
+
   // Benchmark results & Incident state
   const [benchmark, setBenchmark] = useState(null);
   const [incidentResult, setIncidentResult] = useState(null);
@@ -142,13 +152,17 @@ export default function App() {
     }
   };
 
-  const handleRunOptimization = () => {
+  const handleRunOptimization = (opts = {}) => {
+    const pCount = opts?.particles || params.num_particles;
+    const iters = opts?.iterations || params.num_iterations;
+    const w = opts?.weights || weights;
+
     runOptimizationWithConfig({
       preset: currentPreset,
-      num_particles: params.num_particles,
-      num_iterations: params.num_iterations,
+      num_particles: pCount,
+      num_iterations: iters,
       traffic_seed: params.traffic_seed,
-      weights,
+      weights: w,
       road_status_overrides: roadOverrides,
       custom_vehicles: vehicles,
       fleet_size: fleetSize,
@@ -269,6 +283,8 @@ export default function App() {
 
         {activePage === 'simulation' && (
           <SimulationPage
+            simulationConfig={simulationConfig}
+            onUpdateSimulationConfig={setSimulationConfig}
             network={network}
             traffic={traffic}
             scenarios={scenarios}
@@ -281,19 +297,6 @@ export default function App() {
               fetchVehicles(currentPreset, sz).then((v) => {
                 if (v?.vehicles) {
                   setVehicles(v.vehicles);
-                  runOptimizationWithConfig({
-                    preset: currentPreset,
-                    num_particles: params.num_particles,
-                    num_iterations: params.num_iterations,
-                    traffic_seed: params.traffic_seed,
-                    weights,
-                    custom_vehicles: v.vehicles,
-                    fleet_size: sz,
-                    road_status_overrides: roadOverrides,
-                    baseline_method: baselineMethod,
-                    bpr_alpha: bprParams.alpha,
-                    bpr_beta: bprParams.beta,
-                  });
                 }
               });
             }}
@@ -301,6 +304,7 @@ export default function App() {
             params={params}
             onChangeParams={setParams}
             onRunOptimization={handleRunOptimization}
+            onProceedToOptimization={() => setActivePage('optimization')}
             isLoading={isLoading}
             benchmark={benchmark}
           />
@@ -310,60 +314,15 @@ export default function App() {
 
         {activePage === 'optimization' && (
           <OptimizationPage
-            params={params}
-            onChangeParams={setParams}
-            weights={weights}
-            onChangeWeights={setWeights}
+            simulationConfig={simulationConfig}
+            network={network}
+            traffic={traffic}
             vehicles={vehicles}
             fleetSize={fleetSize}
-            onChangeFleetSize={(sz) => {
-              setFleetSize(sz);
-              fetchVehicles(currentPreset, sz).then((v) => {
-                if (v?.vehicles) {
-                  setVehicles(v.vehicles);
-                  runOptimizationWithConfig({
-                    preset: currentPreset,
-                    num_particles: params.num_particles,
-                    num_iterations: params.num_iterations,
-                    traffic_seed: params.traffic_seed,
-                    weights,
-                    custom_vehicles: v.vehicles,
-                    fleet_size: sz,
-                    road_status_overrides: roadOverrides,
-                    baseline_method: baselineMethod,
-                    bpr_alpha: bprParams.alpha,
-                    bpr_beta: bprParams.beta,
-                  });
-                }
-              });
-            }}
-            baselineMethod={baselineMethod}
-            onChangeBaselineMethod={(m) => {
-              setBaselineMethod(m);
-              runOptimizationWithConfig({
-                preset: currentPreset,
-                num_particles: params.num_particles,
-                num_iterations: params.num_iterations,
-                traffic_seed: params.traffic_seed,
-                weights,
-                custom_vehicles: vehicles,
-                fleet_size: fleetSize,
-                road_status_overrides: roadOverrides,
-                baseline_method: m,
-                bpr_alpha: bprParams.alpha,
-                bpr_beta: bprParams.beta,
-              });
-            }}
-            bprParams={bprParams}
-            onChangeBprParams={setBprParams}
-            onAddVehicle={handleAddVehicle}
-            onRemoveVehicle={handleRemoveVehicle}
-            onUpdateVehicle={handleUpdateVehicle}
-            availableNodes={availableNodes}
-            onRunOptimization={handleRunOptimization}
-            isLoading={isLoading}
-            elapsedTime={elapsedTime}
             benchmark={benchmark}
+            isLoading={isLoading}
+            onRunOptimization={handleRunOptimization}
+            onViewOnMap={() => setActivePage('simulation')}
           />
         )}
 

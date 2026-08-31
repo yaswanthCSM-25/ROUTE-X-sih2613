@@ -736,6 +736,45 @@ export default function CitySimulationMap({
           </g>
         )}
 
+        {/* --- Active Optimized Routes Layer (Rendered when Optimization is Run) --- */}
+        {benchmark?.routes?.qpso && (
+          <g>
+            {benchmark.routes.qpso.map((vRoute, idx) => {
+              if (!vRoute.path || vRoute.path.length < 2) return null;
+              
+              const segments = [];
+              for (let i = 0; i < vRoute.path.length - 1; i++) {
+                const uId = vRoute.path[i];
+                const vId = vRoute.path[i + 1];
+                const u = cityData.nodeMap[uId];
+                const v = cityData.nodeMap[vId];
+                if (!u || !v) continue;
+                
+                // Find road curve if any
+                const road = cityData.roads.find(
+                  (r) => (r.source === uId && r.target === vId) || (r.source === vId && r.target === uId)
+                );
+                const curve = road ? road.curve : 0;
+                segments.push(getRoadPathData(u, v, curve));
+              }
+
+              return (
+                <path
+                  key={`opt-path-${idx}`}
+                  d={segments.join(' ')}
+                  fill="none"
+                  stroke="#34d399"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeOpacity="0.9"
+                  filter="url(#neonGlow)"
+                />
+              );
+            })}
+          </g>
+        )}
+
         {/* --- Vehicles on Roads --- */}
         {renderedVehicles.map((veh) => (
           <g
@@ -807,7 +846,7 @@ export default function CitySimulationMap({
         </button>
       </div>
 
-      {/* 3. Floating Minimal Reconfigure Pill */}
+      {/* 3. Floating Action Toolbar: Reconfigure & Proceed to Optimization */}
       <div
         className="map-control-btn"
         style={{
@@ -830,9 +869,30 @@ export default function CitySimulationMap({
         <button
           onClick={onReconfigure}
           className="btn btn-secondary"
-          style={{ padding: '8px 18px', borderRadius: 20, fontSize: '0.84rem', display: 'flex', alignItems: 'center', gap: 6 }}
+          style={{ padding: '8px 16px', borderRadius: 20, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 6 }}
         >
           <Sliders size={14} /> ⚙️ RECONFIGURE SCENARIO
+        </button>
+
+        <button
+          onClick={onRunOptimization}
+          style={{
+            background: 'linear-gradient(135deg, #00f0ff 0%, #0284c7 100%)',
+            color: '#030712',
+            border: 'none',
+            borderRadius: 20,
+            padding: '8px 20px',
+            fontSize: '0.84rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            boxShadow: '0 0 15px rgba(0, 240, 255, 0.5)',
+            letterSpacing: '0.03em',
+          }}
+        >
+          <Zap size={14} color="#030712" /> 🚀 PROCEED TO OPTIMIZATION
         </button>
       </div>
 

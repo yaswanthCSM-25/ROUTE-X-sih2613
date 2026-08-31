@@ -3,6 +3,8 @@ import SimulationControlCenter from '../components/simulation-center/SimulationC
 import CitySimulationMap from '../components/CitySimulationMap';
 
 export default function SimulationPage({
+  simulationConfig,
+  onUpdateSimulationConfig,
   network,
   traffic,
   scenarios,
@@ -15,15 +17,17 @@ export default function SimulationPage({
   params,
   onChangeParams,
   onRunOptimization,
+  onProceedToOptimization,
   isLoading,
   benchmark,
 }) {
   // Mode: 'setup' (Phase 1 6-section config) | 'map' (Phase 2 Full-Screen 2D City Map)
   const [simulationMode, setSimulationMode] = useState('setup');
-  const [activeConfig, setActiveConfig] = useState(null);
 
   const handleSimulate = (config) => {
-    setActiveConfig(config);
+    if (onUpdateSimulationConfig) {
+      onUpdateSimulationConfig(config);
+    }
     if (config?.vehicles?.count && onChangeFleetSize) {
       onChangeFleetSize(config.vehicles.count);
     }
@@ -35,9 +39,9 @@ export default function SimulationPage({
     setSimulationMode('setup');
   };
 
-  const handleExecuteOptimization = () => {
-    if (onRunOptimization) {
-      onRunOptimization();
+  const handleExecuteProceedToOptimization = () => {
+    if (onProceedToOptimization) {
+      onProceedToOptimization();
     }
   };
 
@@ -52,12 +56,12 @@ export default function SimulationPage({
       ) : (
         /* Phase 2: Full-Screen Interactive 2D Illustrated City Map */
         <CitySimulationMap
-          config={activeConfig}
+          config={simulationConfig}
           network={network}
           traffic={traffic}
           vehicles={vehicles}
           onReconfigure={handleReconfigure}
-          onRunOptimization={handleExecuteOptimization}
+          onRunOptimization={handleExecuteProceedToOptimization}
           isLoading={isLoading}
           benchmark={benchmark}
         />
