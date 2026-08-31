@@ -338,7 +338,12 @@ export default function App() {
         {activePage === 'results' && (
           <ResultsPage
             benchmark={benchmark}
+            simulationConfig={simulationConfig}
+            network={network}
+            traffic={traffic}
+            vehicles={vehicles}
             baselineMethod={baselineMethod}
+            onViewOnMap={() => setActivePage('simulation')}
           />
         )}
 
