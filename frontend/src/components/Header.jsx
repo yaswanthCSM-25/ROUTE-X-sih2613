@@ -26,9 +26,9 @@ export default function Header({
 }) {
   const navItems = [
     { id: 'simulation', label: '1. Simulation Lab', icon: Navigation },
-    { id: 'overview', label: '2. Overview', icon: Compass },
-    { id: 'math_model', label: '3. Math Model', icon: BookOpen },
-    { id: 'optimization', label: '4. Swarm Studio', icon: Sliders },
+    { id: 'optimization', label: '2. Route Optimization', icon: Zap },
+    { id: 'overview', label: '3. Overview', icon: Compass },
+    { id: 'math_model', label: '4. Math Model', icon: BookOpen },
     { id: 'routes', label: '5. Routes & Fleet', icon: Navigation },
     { id: 'results', label: '6. Scorecard', icon: Award },
     { id: 'convergence', label: '7. Convergence', icon: TrendingDown },
