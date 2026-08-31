@@ -33,10 +33,8 @@ export default function Header({
   const navItems = [
     { id: 'simulation', label: '1. Simulation Lab & Map', icon: Navigation },
     { id: 'optimization', label: '2. Route Optimization', icon: Zap },
-    { id: 'results', label: '3. Results & Analysis', icon: Award },
-    { id: 'math_model', label: '4. Mathematical Model', icon: BookOpen },
-    { id: 'benchmark', label: '5. Multi-Seed Benchmark', icon: BarChart2 },
-    { id: 'about_sih', label: '6. SIH Hub & Deliverables', icon: FileText },
+    { id: 'results', label: '3. Benchmark & Analysis', icon: Award },
+    { id: 'about_sih', label: '4. SIH Hub & Deliverables', icon: FileText },
   ];
 
   return (
