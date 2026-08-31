@@ -379,8 +379,6 @@ export default function App() {
           />
         )}
 
-        {activePage === 'math_model' && <MathModelPage />}
-
         {activePage === 'optimization' && (
           <OptimizationPage
             simulationConfig={simulationConfig}
@@ -418,13 +416,6 @@ export default function App() {
 
         {activePage === 'convergence' && (
           <ConvergencePage benchmark={benchmark} />
-        )}
-
-        {activePage === 'benchmark' && (
-          <BenchmarkPage
-            currentPreset={currentPreset}
-            fleetSize={fleetSize}
-          />
         )}
 
         {activePage === 'architecture' && <ArchitecturePage />}

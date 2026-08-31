@@ -170,10 +170,10 @@ export default function ResultsPage({
               </span>
             </div>
             <h1 className="font-orbitron" style={{ fontSize: '1.65rem', fontWeight: 900, color: '#f0fdf4', letterSpacing: '0.04em' }}>
-              📊 RESULTS & ANALYSIS
+              📊 BENCHMARK & ANALYSIS
             </h1>
             <p style={{ fontSize: '0.86rem', color: '#94a3b8', margin: '4px 0 0 0' }}>
-              Mathematically defensible evidence evaluating travel time improvements, QPSO vs Classic PSO benchmarks, and fleet telemetry.
+              Empirical algorithmic benchmarks, travel time improvements, QPSO vs Classic PSO convergence, and fleet telemetry.
             </p>
           </div>
 
