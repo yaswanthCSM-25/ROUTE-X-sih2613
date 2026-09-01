@@ -24,7 +24,7 @@ export default function OverviewPage({ onNavigate, currentPreset, backendOnline,
 
         <p style={{ fontSize: '0.96rem', color: '#cbd5e1', lineHeight: 1.7, maxWidth: 1000, marginBottom: 20 }}>
           A scientific simulation and optimization platform designed for <strong>SIH26137</strong>. 
-          Route Planner models transportation networks as directed graphs with coupled Bureau of Public Roads (BPR) 
+          ROUTE-X models transportation networks as directed graphs with coupled Bureau of Public Roads (BPR) 
           congestion dynamics, deploying <strong>Quantum-Behaved Particle Swarm Optimization (QPSO)</strong> 
           to discover system-optimal multi-vehicle routes that minimize travel time, distance, and congestion under hard operational constraints.
         </p>
@@ -106,7 +106,7 @@ export default function OverviewPage({ onNavigate, currentPreset, backendOnline,
               <h3 style={{ fontSize: '1.05rem', color: '#34d399' }}>Engineering Architecture</h3>
             </div>
             <p style={{ fontSize: '0.86rem', color: '#cbd5e1', lineHeight: 1.6 }}>
-              "Route Planner models transportation networks as directed graphs $G=(V,E)$ with non-linear BPR congestion coupling.
+              "ROUTE-X models transportation networks as directed graphs $G=(V,E)$ with non-linear BPR congestion coupling.
               Classical Dijkstra routes vehicles independently without anticipating bottleneck interference.
               QPSO searches the joint multi-vehicle route space to minimize fleet-wide travel time and congestion while respecting road capacities."
             </p>

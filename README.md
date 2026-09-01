@@ -1,4 +1,4 @@
-# Route Planner — Quantum-Inspired Intelligent Traffic Route Optimization
+# ROUTE-X — Quantum-Inspired Intelligent Traffic Route Optimization
 
 **SIH Problem Statement ID:** 26137  
 **Problem Statement Title:** Quantum-Inspired Intelligent Traffic Route Optimization in Transportation Systems Using Metaheuristic Optimization  
@@ -12,7 +12,7 @@
 
 Modern urban transportation networks face persistent challenges of traffic congestion, inefficient route planning, and high operational costs. Classical optimization techniques struggle with large-scale Vehicle Routing Problems (VRP) due to their NP-hard combinatorial complexity. While true quantum hardware remains constrained by NISQ-era physical qubit limitations, **Quantum-Inspired Particle Swarm Optimization (QPSO)** embeds quantum-mechanical wave equation principles (delta-potential-well uncertainty distributions) into classical computation, providing superior global search capabilities, faster convergence, and an optimal balance between exploration and exploitation.
 
-**Route Planner** is a scientific simulation and optimization platform designed for **SIH26137**. It integrates:
+**ROUTE-X** is a scientific simulation and optimization platform designed for **SIH26137**. It integrates:
 * **Graph Network Engine:** Directed/bidirectional road networks with distance, speed limits, capacities, operational status, and 2D spatial layouts.
 * **BPR Traffic & Load Coupling Engine:** Bureau of Public Roads non-linear congestion functions ($t = t_{free}[1 + \alpha (V/C)^\beta]$) with multi-vehicle dynamic load coupling.
 * **Multi-Objective Cost Function:** Normalized trade-off across Travel Time, Travel Distance, and Congestion with hard constraint penalties.

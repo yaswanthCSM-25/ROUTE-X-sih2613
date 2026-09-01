@@ -37,7 +37,7 @@ def run_demo() -> None:
     traffic_model = TrafficModel(seed=42)
     traffic_model.generate(network)
 
-    print_header("ROUTE PLANNER — QUANTUM-INSPIRED ROUTE OPTIMIZATION (SIH26137)")
+    print_header("ROUTE-X — QUANTUM-INSPIRED ROUTE OPTIMIZATION (SIH26137)")
     print(f"Network: {len(network.nodes)} Nodes | {len(network.roads)} Directed Roads | {len(vehicles)} Fleet Vehicles")
 
     # -------------------------------------------------------------

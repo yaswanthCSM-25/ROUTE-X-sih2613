@@ -39,8 +39,8 @@ from app.simulation.traffic import (
 from app.simulation.vehicles import Vehicle, build_demo_vehicles, build_fleet
 
 app = FastAPI(
-    title="Route Planner API — SIH26137",
-    description="Quantum-Inspired Intelligent Traffic Route Optimization in Transportation Systems (Egreen Quanta)",
+    title="ROUTE-X API — SIH26137",
+    description="ROUTE-X: Quantum-Inspired Intelligent Traffic Route Optimization in Transportation Systems (Egreen Quanta)",
     version="1.0.0",
 )
 

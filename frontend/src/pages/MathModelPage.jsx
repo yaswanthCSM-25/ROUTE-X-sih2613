@@ -136,7 +136,7 @@ self.positions[i] = np.clip(p + sign * alpha * np.abs(mbest - self.positions[i])
           Mathematical Architecture & Transportation Physics
         </h1>
         <p style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: 1.6, maxWidth: 960 }}>
-          Every equation in Route Planner represents an established transportation engineering or physics formulation (BPR-Akçelik, VT-Micro, Wardrop Marginal Cost, and QPSO Quantum Mechanics).
+          Every equation in ROUTE-X represents an established transportation engineering or physics formulation (BPR-Akçelik, VT-Micro, Wardrop Marginal Cost, and QPSO Quantum Mechanics).
         </p>
       </div>
 

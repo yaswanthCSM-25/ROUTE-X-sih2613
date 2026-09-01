@@ -12,7 +12,7 @@ export default function SimulationHeader() {
         margin: 0,
         filter: 'drop-shadow(0 0 15px rgba(59, 130, 246, 0.4))'
       }}>
-        ROUTE PLANNER
+        ROUTE-X
       </h1>
       <p style={{ fontSize: '1.1rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
         Simulation Control Center — SIH26137

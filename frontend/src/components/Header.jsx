@@ -90,7 +90,7 @@ export default function Header({
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <h1 className="font-orbitron" style={{ fontSize: '1.18rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0.04em' }}>
-                ROUTE PLANNER
+                ROUTE-X
               </h1>
               <span className="badge badge-cyan" style={{ fontSize: '0.7rem' }}>
                 <Sparkles size={11} /> SIH26137

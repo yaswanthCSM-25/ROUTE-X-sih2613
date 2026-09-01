@@ -37,7 +37,7 @@
     "invalid_routes": 1,
     "valid_rate_pct": 0.0,
     "capacity_violations": [],
-    "runtime_sec": 0.0172,
+    "runtime_sec": 0.0132,
     "particles": 10,
     "iterations": 10,
     "convergence": [
@@ -72,7 +72,7 @@
     "invalid_routes": 1,
     "valid_rate_pct": 0.0,
     "capacity_violations": [],
-    "runtime_sec": 0.009,
+    "runtime_sec": 0.012,
     "particles": 10,
     "iterations": 10,
     "convergence": [

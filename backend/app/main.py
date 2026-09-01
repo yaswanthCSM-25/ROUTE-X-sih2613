@@ -27,7 +27,7 @@ def run_simulation() -> None:
     traffic_model = TrafficModel(seed=42)
     traffic_model.generate(network)
 
-    print_header("ROUTE PLANNER — SIMULATION ENGINE (SIH26137)")
+    print_header("ROUTE-X — SIMULATION ENGINE (SIH26137)")
     print(f"Nodes: {len(network.nodes)}  |  Roads: {len(network.roads)}  "
           f"|  Vehicles: {len(vehicles)}")
 
@@ -71,7 +71,7 @@ def run_simulation() -> None:
 
 def start_server(host: str = "127.0.0.1", port: int = 8000) -> None:
     import uvicorn
-    print(f"Starting Route Planner API server on http://{host}:{port}...")
+    print(f"Starting ROUTE-X API server on http://{host}:{port}...")
     uvicorn.run("app.api:app", host=host, port=port, reload=False)
 
 
