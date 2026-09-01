@@ -37,7 +37,11 @@ class Road:
     free_flow_speed_kmph: float
     capacity_vehicles: int
     status: RoadStatus = RoadStatus.OPEN
-    current_vehicle_count: int = 0
+    current_vehicle_count: float = 0.0
+    lanes: int = 2
+    road_condition: str = "Good"  # Good, Average, Bad
+    width_m: float = 7.0
+    is_one_way: bool = False
     edge_id: Optional[str] = None
 
     def __post_init__(self):
@@ -65,7 +69,7 @@ class Road:
         return (
             f"Road({self.source}->{self.target}, "
             f"{self.distance_km:.1f}km, {self.free_flow_speed_kmph:.0f}km/h, "
-            f"cap={self.capacity_vehicles}, load={self.current_vehicle_count}, {self.status.value})"
+            f"lanes={self.lanes}, cap={self.capacity_vehicles}, load={self.current_vehicle_count:.1f}, {self.status.value})"
         )
 
 
@@ -96,6 +100,9 @@ class RoadNetwork:
         capacity_vehicles: int,
         status: RoadStatus = RoadStatus.OPEN,
         bidirectional: bool = True,
+        lanes: int = 2,
+        road_condition: str = "Good",
+        width_m: float = 7.0,
     ) -> None:
         self.add_node(source)
         self.add_node(target)
@@ -107,6 +114,10 @@ class RoadNetwork:
             free_flow_speed_kmph=free_flow_speed_kmph,
             capacity_vehicles=capacity_vehicles,
             status=status,
+            lanes=lanes,
+            road_condition=road_condition,
+            width_m=width_m,
+            is_one_way=not bidirectional,
         )
         self.roads.append(forward)
         self.adjacency[source].append(forward)
@@ -119,6 +130,10 @@ class RoadNetwork:
                 free_flow_speed_kmph=free_flow_speed_kmph,
                 capacity_vehicles=capacity_vehicles,
                 status=status,
+                lanes=lanes,
+                road_condition=road_condition,
+                width_m=width_m,
+                is_one_way=False,
             )
             self.roads.append(backward)
             self.adjacency[target].append(backward)

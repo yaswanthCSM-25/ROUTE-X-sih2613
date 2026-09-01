@@ -14,8 +14,8 @@ Calculates:
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from app.simulation.emissions import compute_route_emissions
-from app.simulation.graph import RoadNetwork
+from app.simulation.emissions import VEHICLE_BASE_SPEEDS, compute_route_emissions
+from app.simulation.graph import RoadNetwork, RoadStatus
 from app.simulation.traffic import TrafficModel
 
 
@@ -53,7 +53,8 @@ def evaluate_route(
     vehicle_type: str = "Cars",
 ) -> RouteMetrics:
     """
-    Evaluates comprehensive physical, kinematics, and environmental metrics along a candidate path.
+    Evaluates comprehensive physical, kinematics, and environmental metrics along a candidate path
+    accounting for vehicle capabilities, lane widths, road conditions, and congestion.
     """
     metrics = RouteMetrics(path=list(path))
 
@@ -61,22 +62,41 @@ def evaluate_route(
         return metrics
 
     total_vc = 0.0
+    base_vehicle_speed = VEHICLE_BASE_SPEEDS.get(vehicle_type, 50.0)
 
     for source, target in zip(path[:-1], path[1:]):
         if not network.road_exists(source, target):
-            metrics.broken_edges.append(f"{source}->{target}")
+            metrics.broken_edges.append(f"{source}->{target} (NO_LINK)")
             continue
 
         road = network.get_road(source, target)
+        if road.status == RoadStatus.CLOSED:
+            metrics.broken_edges.append(f"{source}->{target} (CLOSED)")
+
+        # Vehicle-road kinematic speed resolution
+        road_speed = road.free_flow_speed_kmph
+        eff_speed = min(road_speed, base_vehicle_speed)
+
+        # Vehicle-specific sensitivity to road physical attributes
+        lanes = getattr(road, "lanes", 2)
+        condition = getattr(road, "road_condition", "Good")
+
+        if vehicle_type == "Lorries" and lanes == 1:
+            eff_speed *= 0.85  # Heavy vehicle width constraint on single-lane roads
+        elif vehicle_type in ("Bikes", "Scooters") and condition == "Bad":
+            eff_speed *= 0.82  # Two-wheeler friction penalty on bad/damaged pavement
+
+        free_time_min = (road.distance_km / max(5.0, eff_speed)) * 60.0
+
         actual_time = traffic_model.actual_travel_time_min(
-            source, target, road.free_flow_time_min, road.capacity_vehicles
+            source, target, free_time_min, road.capacity_vehicles
         )
         congestion = traffic_model.get_congestion(source, target, road.capacity_vehicles)
         vc = traffic_model.get_vc_ratio(source, target, road.capacity_vehicles)
 
         metrics.distance_km += road.distance_km
         metrics.time_min += actual_time
-        metrics.free_flow_time_min += road.free_flow_time_min
+        metrics.free_flow_time_min += free_time_min
         metrics.congestion += congestion
         total_vc += vc
         metrics.edges_used += 1

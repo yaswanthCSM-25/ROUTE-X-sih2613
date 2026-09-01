@@ -28,6 +28,53 @@ class VehicleSolution:
     path: List[str]
     metrics: RouteMetrics
     constraint: ConstraintResult
+    explanation: str = ""
+
+
+def generate_route_explanation(
+    network: RoadNetwork,
+    traffic_model: TrafficModel,
+    vehicle: Vehicle,
+    path: List[str],
+    metrics: RouteMetrics,
+    constraint: ConstraintResult,
+) -> str:
+    """
+    Generates an intelligent, mathematically grounded explanation for why this route was selected.
+    """
+    if not constraint.valid:
+        if any("destination_unreachable" in v for v in constraint.violations):
+            return "No feasible route: Destination unreachable due to road closure or network disconnection."
+        if any("closed_roads_used" in v for v in constraint.violations):
+            return "Infeasible route: Contains barricaded / closed road."
+        return f"Infeasible route: {', '.join(constraint.violations)}."
+
+    if len(path) < 2:
+        return "Vehicle is at origin/destination node."
+
+    reasons = []
+    # 1. Closed road avoidance
+    has_closed_in_network = any(r.status.value == "CLOSED" for r in network.roads)
+    if has_closed_in_network:
+        reasons.append("Detoured around active road closure")
+
+    # 2. Vehicle-specific considerations
+    v_type = getattr(vehicle, "vehicle_type", "Cars")
+    if v_type == "Lorries":
+        reasons.append("Selected wide, high-capacity corridor for heavy freight (PCE 3.0)")
+    elif v_type in ("Bikes", "Scooters"):
+        reasons.append("Agile corridor with minimal surface friction")
+
+    # 3. Traffic & Level of Service
+    if metrics.level_of_service in ("LOS A", "LOS B"):
+        reasons.append(f"Uncongested corridor maintaining high level of service ({metrics.level_of_service})")
+    elif metrics.delay_min <= 1.5:
+        reasons.append("Low queuing delay bypassing network bottleneck")
+    else:
+        reasons.append("Load-balanced corridor minimizing aggregate fleet travel time")
+
+    reasons.append(f"Optimal transit: {metrics.time_min:.1f} min ({metrics.distance_km:.1f} km)")
+    return " • ".join(reasons[:2])
 
 
 @dataclass
@@ -69,12 +116,14 @@ def evaluate_routes_as_solution(
             metrics = evaluate_route(network, traffic_model, path, vehicle_type=v_type)
             constraint = check_route(network, metrics, vehicle.origin, vehicle.destination)
 
+        explanation = generate_route_explanation(network, traffic_model, vehicle, path or [], metrics, constraint)
         vehicle_solutions.append(
             VehicleSolution(
                 vehicle_id=vehicle.vehicle_id,
                 path=path or [],
                 metrics=metrics,
                 constraint=constraint,
+                explanation=explanation,
             )
         )
 

@@ -19,12 +19,12 @@ from app.routing.evaluator import RouteMetrics
 from app.simulation.graph import RoadNetwork, RoadStatus
 from app.simulation.traffic import TrafficModel
 
-# Configurable penalty coefficients
-LAMBDA_INVALID_EDGE = 100.0
-LAMBDA_CLOSED_ROAD = 150.0
-LAMBDA_UNREACHABLE = 200.0
-LAMBDA_CYCLE = 25.0
-LAMBDA_CAPACITY_OVERFLOW = 20.0
+# Configurable penalty coefficients for strict hard constraint enforcement
+LAMBDA_INVALID_EDGE = 500.0
+LAMBDA_CLOSED_ROAD = 1000.0
+LAMBDA_UNREACHABLE = 2000.0
+LAMBDA_CYCLE = 50.0
+LAMBDA_CAPACITY_OVERFLOW = 30.0
 
 
 @dataclass

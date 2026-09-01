@@ -23,6 +23,7 @@ VEHICLE_FUEL_FACTORS: Dict[str, float] = {
     "Cars": 1.0,
     "Mixed": 1.15,
     "Bikes": 0.35,
+    "Scooters": 0.30,
     "Vans": 1.45,
     "Lorries": 3.20,
     "Emergency": 1.25,
@@ -30,11 +31,22 @@ VEHICLE_FUEL_FACTORS: Dict[str, float] = {
 
 VEHICLE_PCE: Dict[str, float] = {
     "Cars": 1.0,
-    "Mixed": 1.1,
+    "Mixed": 1.0,
     "Bikes": 0.5,
+    "Scooters": 0.5,
     "Vans": 1.5,
     "Lorries": 2.5,
     "Emergency": 1.2,
+}
+
+VEHICLE_BASE_SPEEDS: Dict[str, float] = {
+    "Cars": 50.0,
+    "Mixed": 48.0,
+    "Bikes": 58.0,
+    "Scooters": 40.0,
+    "Vans": 44.0,
+    "Lorries": 34.0,
+    "Emergency": 65.0,
 }
 
 

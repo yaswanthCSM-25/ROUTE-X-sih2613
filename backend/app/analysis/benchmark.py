@@ -258,6 +258,7 @@ def run_benchmark(
                 "avg_speed_kmph": vs.metrics.avg_speed_kmph,
                 "valid": vs.constraint.valid,
                 "violations": vs.constraint.violations,
+                "explanation": getattr(vs, "explanation", ""),
             }
             for i, vs in enumerate(baseline_solution.vehicle_solutions)
         ],
@@ -277,6 +278,7 @@ def run_benchmark(
                 "avg_speed_kmph": vs.metrics.avg_speed_kmph,
                 "valid": vs.constraint.valid,
                 "violations": vs.constraint.violations,
+                "explanation": getattr(vs, "explanation", ""),
             }
             for i, vs in enumerate(best_solution.vehicle_solutions)
         ],
@@ -296,6 +298,7 @@ def run_benchmark(
                 "avg_speed_kmph": vs.metrics.avg_speed_kmph,
                 "valid": vs.constraint.valid,
                 "violations": vs.constraint.violations,
+                "explanation": getattr(vs, "explanation", ""),
             }
             for i, vs in enumerate(pso_solution.vehicle_solutions)
         ],

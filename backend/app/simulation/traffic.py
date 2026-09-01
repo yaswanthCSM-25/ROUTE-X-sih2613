@@ -134,8 +134,8 @@ class TrafficModel:
         base_c = self.static_congestion.get(key, 0.15)
         eff_cap = self.get_effective_capacity(capacity)
         load = self.vehicle_counts.get(key, 0.0)
-        total_vol = load + (base_c * eff_cap * 0.4)
-        return total_vol / eff_cap
+        total_vol = load + (base_c * eff_cap * 0.8)
+        return total_vol / max(0.1, eff_cap)
 
     def get_congestion(self, source: str, target: str, capacity: int = 6) -> float:
         """
