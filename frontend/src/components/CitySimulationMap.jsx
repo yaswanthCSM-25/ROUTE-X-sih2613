@@ -47,6 +47,8 @@ export default function CitySimulationMap({
   vehicles = [],
   scenarios = [],
   currentPreset = 'demo',
+  selectedAlgorithm = 'qpso',
+  isOptimized = false,
   onSelectPreset,
   onInjectIncident,
   onClearIncidents,
@@ -465,13 +467,15 @@ export default function CitySimulationMap({
     const typePool = vType === 'Mixed' ? ['Cars', 'Bikes', 'Vans', 'Lorries', 'Scooters'] : [vType];
 
     const initialFleet = [];
-    const qpsoRoutes = benchmark?.routes?.qpso || [];
+    const activeRoutes = selectedAlgorithm === 'pso_classic'
+      ? (benchmark?.routes?.pso || benchmark?.routes?.qpso || [])
+      : (benchmark?.routes?.qpso || []);
 
     for (let i = 0; i < count; i++) {
       const vehId = `V-${String(i + 1).padStart(2, '0')}`;
       const type = typePool[i % typePool.length];
 
-      let candidatePath = qpsoRoutes[i]?.path;
+      let candidatePath = activeRoutes[i]?.path;
       const isPathValid =
         candidatePath &&
         candidatePath.length > 1 &&

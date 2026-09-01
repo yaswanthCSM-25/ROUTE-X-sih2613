@@ -30,7 +30,7 @@ def calibrate(
     traffic_model: TrafficModel,
     vehicles: List[Vehicle],
     steps_per_vehicle: int,
-    sample_size: int = 150,
+    sample_size: int = 25,
     seed: int = 7,
     known_good_totals: Optional[Tuple[float, float, float]] = None,
 ) -> CalibrationBounds:
