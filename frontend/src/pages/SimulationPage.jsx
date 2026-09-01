@@ -39,7 +39,21 @@ export default function SimulationPage({
     if (config?.vehicles?.count && onChangeFleetSize) {
       onChangeFleetSize(config.vehicles.count);
     }
-    // Transition to Phase 2 Full-screen 2D Illustrated City Map
+    // Navigate directly to Phase 4 Route Optimization
+    if (onProceedToOptimization) {
+      onProceedToOptimization();
+    } else {
+      setSimulationMode('map');
+    }
+  };
+
+  const handleOpenMap = (config) => {
+    if (onUpdateSimulationConfig) {
+      onUpdateSimulationConfig(config);
+    }
+    if (config?.vehicles?.count && onChangeFleetSize) {
+      onChangeFleetSize(config.vehicles.count);
+    }
     setSimulationMode('map');
   };
 
@@ -59,6 +73,7 @@ export default function SimulationPage({
         /* Phase 1: Simulation Setup & 6 Configuration Sections with Scenarios */
         <SimulationControlCenter
           onSimulate={handleSimulate}
+          onOpenMap={handleOpenMap}
           scenarios={scenarios}
           currentPreset={currentPreset}
           onSelectPreset={onSelectPreset}

@@ -42,6 +42,7 @@ export const DEFAULT_SIMULATION_CONFIG = {
 
 export default function SimulationControlCenter({
   onSimulate,
+  onOpenMap,
   scenarios = [],
   currentPreset = 'demo',
   onSelectPreset,
@@ -231,28 +232,50 @@ export default function SimulationControlCenter({
           <span>Inputs bound to transportation physics and BPR volume-delay curves.</span>
         </div>
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          style={{
-            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: 10,
-            padding: '12px 28px',
-            fontSize: '0.95rem',
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            boxShadow: '0 0 20px rgba(16, 185, 129, 0.5)',
-            letterSpacing: '0.03em',
-          }}
-        >
-          <Rocket size={17} />
-          <span>SIMULATE & OPEN 2D MAP</span>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {onOpenMap && (
+            <button
+              type="button"
+              onClick={() => onOpenMap(config)}
+              className="btn btn-secondary"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                padding: '12px 20px',
+                borderRadius: 10,
+              }}
+              title="Preview simulation on the 2D City Map without navigating"
+            >
+              🗺️ <span>VIEW 2D MAP</span>
+            </button>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            style={{
+              background: 'linear-gradient(135deg, #00f0ff 0%, #0284c7 100%)',
+              color: '#030712',
+              border: 'none',
+              borderRadius: 10,
+              padding: '12px 28px',
+              fontSize: '0.95rem',
+              fontWeight: 900,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              boxShadow: '0 0 20px rgba(0, 240, 255, 0.45)',
+              letterSpacing: '0.03em',
+            }}
+          >
+            <Rocket size={17} color="#030712" />
+            <span>SIMULATE & PROCEED TO ROUTE OPTIMIZATION ➔</span>
+          </button>
+        </div>
       </div>
     </form>
   );
