@@ -20,6 +20,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 from app.optimization.baseline import BaselineResult, run_baseline
 from app.optimization.calibration import CalibrationBounds, calibrate
 from app.optimization.qpso import QPSO
+from app.optimization.pso_classic import ClassicPSO
 from app.optimization.solution import FullSolution, evaluate_routes_as_solution, evaluate_solution
 from app.simulation.graph import (
     RoadNetwork,
@@ -167,6 +168,32 @@ def run_benchmark(
     )
     qpso_summary["particles"] = num_particles
     qpso_summary["iterations"] = num_iterations
+    qpso_summary["convergence"] = qpso_result.convergence
+
+    # 3b. Classical PSO Optimization (Eberhart-Kennedy Velocity-Position)
+    t0_pso = time.perf_counter()
+    pso_optimizer = ClassicPSO(
+        dimensions=dimensions,
+        num_particles=num_particles,
+        num_iterations=num_iterations,
+        seed=seed,
+    )
+    pso_gbest_pos, pso_gbest_fit, pso_conv, pso_runtime = pso_optimizer.optimize(fitness_fn)
+    pso_solution = evaluate_solution(
+        network,
+        traffic_model,
+        vehicles,
+        pso_gbest_pos,
+        steps_per_vehicle,
+        bounds,
+        weights=w_dict,
+    )
+    pso_summary = _solution_summary(
+        pso_solution, runtime_sec=pso_runtime, method_name="pso_classic"
+    )
+    pso_summary["particles"] = num_particles
+    pso_summary["iterations"] = num_iterations
+    pso_summary["convergence"] = pso_conv
 
     # 4. Comparative Metrics
     comparison_payload = {
@@ -190,6 +217,13 @@ def run_benchmark(
         ),
         "fitness_improvement_pct": calc_improvement(
             baseline_summary["fitness"], qpso_summary["fitness"]
+        ),
+        # PSO vs QPSO Improvement
+        "qpso_vs_pso_time_improvement_pct": calc_improvement(
+            pso_summary["time_total_min"], qpso_summary["time_total_min"]
+        ),
+        "qpso_vs_pso_fitness_improvement_pct": calc_improvement(
+            pso_summary["fitness"], qpso_summary["fitness"]
         ),
         # Deltas for UI badges
         "time_delta_pct": round(
@@ -246,6 +280,25 @@ def run_benchmark(
             }
             for i, vs in enumerate(best_solution.vehicle_solutions)
         ],
+        "pso": [
+            {
+                "vehicle_id": vs.vehicle_id,
+                "origin": vehicles[i].origin,
+                "destination": vehicles[i].destination,
+                "path": vs.path,
+                "distance_km": round(vs.metrics.distance_km, 2),
+                "time_min": round(vs.metrics.time_min, 2),
+                "delay_min": round(vs.metrics.delay_min, 2),
+                "congestion": round(vs.metrics.congestion, 2),
+                "fuel_liters": round(vs.metrics.fuel_liters, 3),
+                "co2_kg": round(vs.metrics.co2_kg, 3),
+                "level_of_service": vs.metrics.level_of_service,
+                "avg_speed_kmph": vs.metrics.avg_speed_kmph,
+                "valid": vs.constraint.valid,
+                "violations": vs.constraint.violations,
+            }
+            for i, vs in enumerate(pso_solution.vehicle_solutions)
+        ],
     }
 
     # 6. Artifact persistence
@@ -267,6 +320,7 @@ def run_benchmark(
                 {
                     "baseline": baseline_summary,
                     "qpso": qpso_summary,
+                    "pso": pso_summary,
                     "comparison": comparison_payload,
                 },
                 f,
@@ -278,6 +332,7 @@ def run_benchmark(
     return {
         "baseline": baseline_summary,
         "qpso": qpso_summary,
+        "pso": pso_summary,
         "comparison": comparison_payload,
         "routes": routes_payload,
         "convergence": qpso_result.convergence,

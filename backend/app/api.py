@@ -106,6 +106,7 @@ class OptimizeRequest(BaseModel):
     surface_good_pct: float = Field(60.0, ge=0.0, le=100.0)
     surface_bad_pct: float = Field(20.0, ge=0.0, le=100.0)
     fleet_composition: str = Field("Mixed", description="Mixed, Cars, Bikes, Vans, Lorries, or Emergency")
+    algorithm: str = Field("qpso", description="qpso or pso_classic")
 
 
 # =========================================================================
@@ -417,6 +418,7 @@ def optimize_routes(req: OptimizeRequest):
         for v in vehicles
     ]
     result["preset"] = req.preset
+    result["selected_algorithm"] = req.algorithm
 
     return result
 

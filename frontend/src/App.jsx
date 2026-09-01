@@ -195,6 +195,14 @@ export default function App() {
     const pCount = opts?.particles || params.num_particles;
     const iters = opts?.iterations || params.num_iterations;
     const w = opts?.weights || weights;
+    const algo = opts?.algorithm || 'qpso';
+
+    const weather = simulationConfig?.conditions?.weather || 'Normal';
+    const surfaceGood = simulationConfig?.conditions?.roadCondition === 'Good' ? 90.0 : (simulationConfig?.conditions?.roadCondition === 'Bad' ? 20.0 : 60.0);
+    const surfaceBad = simulationConfig?.conditions?.roadCondition === 'Bad' ? 60.0 : (simulationConfig?.conditions?.roadCondition === 'Good' ? 5.0 : 20.0);
+    const fleetComp = simulationConfig?.vehicles?.type || 'Mixed';
+    const bprA = simulationConfig?.traffic?.level === 'Extreme Congestion' ? 0.35 : (simulationConfig?.traffic?.level === 'High' ? 0.25 : (simulationConfig?.traffic?.level === 'Light' ? 0.08 : bprParams.alpha));
+    const bprB = simulationConfig?.traffic?.level === 'Extreme Congestion' ? 4.5 : (simulationConfig?.traffic?.level === 'High' ? 4.2 : bprParams.beta);
 
     runOptimizationWithConfig({
       preset: currentPreset,
@@ -204,10 +212,15 @@ export default function App() {
       weights: w,
       road_status_overrides: roadOverrides,
       custom_vehicles: vehicles,
-      fleet_size: fleetSize,
+      fleet_size: fleetSize || simulationConfig?.vehicles?.count,
       baseline_method: baselineMethod,
-      bpr_alpha: bprParams.alpha,
-      bpr_beta: bprParams.beta,
+      bpr_alpha: bprA,
+      bpr_beta: bprB,
+      weather,
+      surface_good_pct: surfaceGood,
+      surface_bad_pct: surfaceBad,
+      fleet_composition: fleetComp,
+      algorithm: algo,
     });
   };
 
