@@ -135,6 +135,36 @@ def get_vehicles_for_preset(
     return build_demo_vehicles()
 
 
+def _serialize_network(network: RoadNetwork, traffic_model: Optional[TrafficModel] = None) -> dict:
+    return {
+        "nodes": [
+            {
+                "id": n,
+                "x": network.node_positions.get(n, (100, 100))[0],
+                "y": network.node_positions.get(n, (100, 100))[1],
+            }
+            for n in network.nodes
+        ],
+        "roads": [
+            {
+                "source": r.source,
+                "target": r.target,
+                "distance_km": r.distance_km,
+                "speed_kmph": r.free_flow_speed_kmph,
+                "free_time_min": round(r.free_flow_time_min, 2),
+                "capacity": r.capacity_vehicles,
+                "status": r.status.value,
+                "load": traffic_model.vehicle_counts.get((r.source, r.target), 0.0) if traffic_model else 0.0,
+                "congestion": round(traffic_model.get_congestion(r.source, r.target, r.capacity_vehicles), 3) if traffic_model else 0.0,
+                "actual_time_min": round(
+                    traffic_model.actual_travel_time_min(r.source, r.target, r.free_flow_time_min, r.capacity_vehicles), 2
+                ) if traffic_model else round(r.free_flow_time_min, 2),
+            }
+            for r in network.roads
+        ],
+    }
+
+
 # =========================================================================
 # REST Endpoints
 # =========================================================================
@@ -381,33 +411,7 @@ def optimize_routes(req: OptimizeRequest):
     )
 
     # Enrich payload with network nodes & road metadata
-    result["network"] = {
-        "nodes": [
-            {
-                "id": n,
-                "x": network.node_positions.get(n, (100, 100))[0],
-                "y": network.node_positions.get(n, (100, 100))[1],
-            }
-            for n in network.nodes
-        ],
-        "roads": [
-            {
-                "source": r.source,
-                "target": r.target,
-                "distance_km": r.distance_km,
-                "speed_kmph": r.free_flow_speed_kmph,
-                "free_time_min": round(r.free_flow_time_min, 2),
-                "capacity": r.capacity_vehicles,
-                "status": r.status.value,
-                "load": traffic_model.vehicle_counts.get((r.source, r.target), 0.0),
-                "congestion": round(traffic_model.get_congestion(r.source, r.target, r.capacity_vehicles), 3),
-                "actual_time_min": round(
-                    traffic_model.actual_travel_time_min(r.source, r.target, r.free_flow_time_min, r.capacity_vehicles), 2
-                ),
-            }
-            for r in network.roads
-        ],
-    }
+    result["network"] = _serialize_network(network, traffic_model)
     result["vehicles"] = [
         {
             "vehicle_id": v.vehicle_id,
@@ -443,6 +447,7 @@ def trigger_incident(req: IncidentRequest):
         num_iterations=30,
         seed=42,
     )
+    pre_result["network"] = _serialize_network(network, traffic_model)
 
     # 2. Inject incident
     incident = Incident(
@@ -464,6 +469,16 @@ def trigger_incident(req: IncidentRequest):
         num_iterations=40,
         seed=42,
     )
+    post_result["network"] = _serialize_network(network, traffic_model)
+    post_result["vehicles"] = [
+        {
+            "vehicle_id": v.vehicle_id,
+            "origin": v.origin,
+            "destination": v.destination,
+            "vehicle_type": v.vehicle_type,
+        }
+        for v in vehicles
+    ]
 
     return {
         "incident": {
