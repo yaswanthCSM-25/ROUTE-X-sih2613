@@ -33,9 +33,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-frontend/dist/
 frontend/node_modules/
 .vite/
+!frontend/dist/
+!frontend/dist/**
 
 # Operating System & IDEs
 .DS_Store
