@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "route-planner-sih26137": "file:.."
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
