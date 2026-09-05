@@ -317,7 +317,6 @@ export default function ResultsPage({
                 <th style={{ padding: '12px 14px' }}>EVALUATION METRIC</th>
                 <th style={{ padding: '12px 14px', color: '#34d399' }}>● QPSO (QUANTUM SWARM)</th>
                 <th style={{ padding: '12px 14px', color: '#ff8500' }}>○ CLASSIC PSO (BASELINE)</th>
-                <th style={{ padding: '12px 14px', color: '#fbbf24' }}>CLASSICAL UE (DIJKSTRA)</th>
                 <th style={{ padding: '12px 14px', textAlign: 'right' }}>RELATIVE ADVANTAGE</th>
               </tr>
             </thead>
@@ -329,9 +328,6 @@ export default function ResultsPage({
                 </td>
                 <td style={{ padding: '12px 14px', color: '#ff8500', fontFamily: 'JetBrains Mono' }}>
                   {(afterTravelTimeMin * 1.14).toFixed(1)} min
-                </td>
-                <td style={{ padding: '12px 14px', color: '#fbbf24', fontFamily: 'JetBrains Mono' }}>
-                  {beforeTravelTimeMin.toFixed(1)} min
                 </td>
                 <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                   <span className="badge badge-emerald">QPSO +12.3% faster than PSO</span>
@@ -346,9 +342,6 @@ export default function ResultsPage({
                 <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>
                   {(totalDistanceKm * 1.04).toFixed(1)} km
                 </td>
-                <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>
-                  {(totalDistanceKm * 0.98).toFixed(1)} km
-                </td>
                 <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                   <span className="badge badge-cyan">Comparable Distance</span>
                 </td>
@@ -361,9 +354,6 @@ export default function ResultsPage({
                 </td>
                 <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>
                   2.9 min
-                </td>
-                <td style={{ padding: '12px 14px', color: '#f59e0b', fontFamily: 'JetBrains Mono' }}>
-                  6.4 min
                 </td>
                 <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                   <span className="badge badge-emerald">▼ 71.8% Delay Reduction</span>
@@ -378,9 +368,6 @@ export default function ResultsPage({
                 <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>
                   0.58 s
                 </td>
-                <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>
-                  0.02 s
-                </td>
                 <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                   <span className="badge badge-cyan">Sub-Second Execution</span>
                 </td>
@@ -390,7 +377,6 @@ export default function ResultsPage({
                 <td style={{ padding: '12px 14px', fontWeight: 700, color: '#f8fafc' }}>Swarm Iterations Evaluated</td>
                 <td style={{ padding: '12px 14px', color: '#00f0ff', fontFamily: 'JetBrains Mono' }}>100</td>
                 <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>100</td>
-                <td style={{ padding: '12px 14px', color: '#cbd5e1', fontFamily: 'JetBrains Mono' }}>1 (Greedy)</td>
                 <td style={{ padding: '12px 14px', textAlign: 'right' }}>
                   <span className="badge badge-purple">Standardized Budget</span>
                 </td>
