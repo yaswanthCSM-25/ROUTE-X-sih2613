@@ -38,6 +38,7 @@ class Road:
     capacity_vehicles: int
     status: RoadStatus = RoadStatus.OPEN
     current_vehicle_count: float = 0.0
+    congestion: float = 0.0  # c_ij in [0, 1]
     lanes: int = 2
     road_condition: str = "Good"  # Good, Average, Bad
     width_m: float = 7.0
@@ -52,11 +53,35 @@ class Road:
     def free_flow_time_min(self) -> float:
         """
         Free-flow travel time in minutes:
-            t_free = (distance_km / speed_kmph) * 60
+            t_ij^0 = (distance_km / speed_kmph) * 60
         """
         if self.free_flow_speed_kmph <= 0:
             return 999.0
         return (self.distance_km / self.free_flow_speed_kmph) * 60
+
+    # Mathematical formulation aliases
+    @property
+    def d_ij(self) -> float:
+        """Distance d_ij in km."""
+        return self.distance_km
+
+    @property
+    def t_ij_0(self) -> float:
+        """Free-flow time t_ij^0 in minutes."""
+        return self.free_flow_time_min
+
+    @property
+    def c_ij(self) -> float:
+        """Congestion index c_ij in [0, 1]."""
+        return self.congestion
+
+    def effective_travel_time_min(self, alpha: float = 0.15, congestion: Optional[float] = None) -> float:
+        """
+        Dynamic effective travel time:
+            tau_ij = t_ij^0 * (1 + alpha * c_ij)
+        """
+        c = congestion if congestion is not None else self.congestion
+        return self.free_flow_time_min * (1.0 + alpha * c)
 
     @property
     def congestion_ratio(self) -> float:
@@ -68,7 +93,7 @@ class Road:
     def __repr__(self) -> str:
         return (
             f"Road({self.source}->{self.target}, "
-            f"{self.distance_km:.1f}km, {self.free_flow_speed_kmph:.0f}km/h, "
+            f"d={self.distance_km:.1f}km, t0={self.free_flow_time_min:.1f}min, c={self.congestion:.2f}, "
             f"lanes={self.lanes}, cap={self.capacity_vehicles}, load={self.current_vehicle_count:.1f}, {self.status.value})"
         )
 

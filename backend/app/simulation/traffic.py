@@ -100,7 +100,9 @@ class TrafficModel:
         self.vehicle_counts = {}
         for road in network.roads:
             key = (road.source, road.target)
-            self.static_congestion[key] = round(self._rng.uniform(0.05, 0.65), 3)
+            c_val = round(self._rng.uniform(0.05, 0.65), 3)
+            self.static_congestion[key] = c_val
+            road.congestion = c_val
             self.vehicle_counts[key] = 0.0
         return self.static_congestion
 

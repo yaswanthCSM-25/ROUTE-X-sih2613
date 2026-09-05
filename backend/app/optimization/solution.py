@@ -12,9 +12,15 @@ Pipeline:
 from dataclasses import dataclass
 from typing import List, Optional
 
+from app.models.mathematical_model import (
+    FeasibilityResult,
+    ModelWeights,
+    ObjectiveBreakdown,
+    TrafficRoutingModel,
+)
 from app.optimization.calibration import CalibrationBounds
 from app.optimization.decoder import decode_all_vehicles
-from app.optimization.fitness import SolutionTotals, compute_fitness
+from app.optimization.fitness import SolutionTotals, compute_exact_objective_z, compute_fitness
 from app.routing.constraints import ConstraintResult, check_fleet_capacity_violations, check_route
 from app.routing.evaluator import RouteMetrics, evaluate_route
 from app.simulation.graph import RoadNetwork
@@ -29,6 +35,16 @@ class VehicleSolution:
     metrics: RouteMetrics
     constraint: ConstraintResult
     explanation: str = ""
+
+
+@dataclass
+class FullSolution:
+    vehicle_solutions: List[VehicleSolution]
+    totals: SolutionTotals
+    fitness: float
+    capacity_violations: List[str]
+    mathematical_objective: Optional[ObjectiveBreakdown] = None
+    feasibility: Optional[FeasibilityResult] = None
 
 
 def generate_route_explanation(
@@ -77,14 +93,6 @@ def generate_route_explanation(
     return " • ".join(reasons[:2])
 
 
-@dataclass
-class FullSolution:
-    vehicle_solutions: List[VehicleSolution]
-    totals: SolutionTotals
-    fitness: float
-    capacity_violations: List[str]
-
-
 def evaluate_routes_as_solution(
     network: RoadNetwork,
     traffic_model: TrafficModel,
@@ -92,16 +100,27 @@ def evaluate_routes_as_solution(
     routes: List[List[str]],
     bounds: CalibrationBounds,
     weights: Optional[dict] = None,
+    mathematical_model: Optional[TrafficRoutingModel] = None,
 ) -> FullSolution:
     """
     Evaluates an explicit list of candidate routes for the fleet
-    using PCE traffic load coupling, constraint validation, and multi-objective scoring.
+    using PCE traffic load coupling, constraint validation, and mathematical multi-objective scoring.
     """
     # Extract vehicle types for PCE weighting
     v_types = [v.vehicle_type if hasattr(v, "vehicle_type") else "Cars" for v in vehicles]
 
     # Dynamic multi-vehicle traffic load coupling with PCE weights
     traffic_model.update_vehicle_loads(routes, vehicle_types=v_types)
+
+    # Initialize or use mathematical formulation model
+    math_model = mathematical_model or TrafficRoutingModel(
+        network=network,
+        traffic_model=traffic_model,
+        vehicles=vehicles,
+        weights=ModelWeights.from_dict(weights),
+    )
+    math_objective = math_model.objective_function(routes)
+    math_feasibility = math_model.is_feasible(routes)
 
     vehicle_solutions = []
     d_total = t_total = c_total = penalty_total = 0.0
@@ -167,6 +186,7 @@ def evaluate_routes_as_solution(
         delay_total=round(delay_total, 2),
         free_flow_time_total=round(free_time_total, 2),
         avg_los=avg_los,
+        objective_z=math_objective.z_value,
     )
 
     fitness = compute_fitness(
@@ -178,6 +198,8 @@ def evaluate_routes_as_solution(
         totals=totals,
         fitness=round(fitness, 5),
         capacity_violations=cap_violations,
+        mathematical_objective=math_objective,
+        feasibility=math_feasibility,
     )
 
 

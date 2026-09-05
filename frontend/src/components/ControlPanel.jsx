@@ -259,9 +259,25 @@ export default function ControlPanel({
         </div>
       )}
 
-      {/* Tab 2: Objective Weights */}
+      {/* Tab 2: Mathematical Objective Weights (w1, w2, w3) */}
       {activeTab === 'weights' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Mathematical Formulation Card */}
+          <div style={{
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            borderRadius: 8,
+            padding: '8px 10px',
+            fontSize: '0.74rem',
+          }}>
+            <div style={{ color: '#34d399', fontWeight: 700, marginBottom: 2 }}>
+              Objective: Minimize Z
+            </div>
+            <div style={{ color: '#f8fafc', fontFamily: 'JetBrains Mono', fontSize: '0.72rem' }}>
+              Z = {weights.alpha.toFixed(2)}·<span style={{ color: '#38bdf8' }}>Στ</span> + {weights.beta.toFixed(2)}·<span style={{ color: '#34d399' }}>Σd</span> + {weights.gamma.toFixed(2)}·<span style={{ color: '#f59e0b' }}>Σc</span>
+            </div>
+          </div>
+
           {/* Quick Presets */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <button
@@ -276,29 +292,29 @@ export default function ControlPanel({
               onClick={() => applyWeightPreset(0.7, 0.15, 0.15)}
               style={{ fontSize: '0.72rem' }}
             >
-              ⚡ Time Critical
+              ⚡ Time (w1=0.7)
             </button>
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => applyWeightPreset(0.15, 0.7, 0.15)}
               style={{ fontSize: '0.72rem' }}
             >
-              📍 Min Distance
+              📍 Dist (w2=0.7)
             </button>
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => applyWeightPreset(0.15, 0.15, 0.7)}
               style={{ fontSize: '0.72rem' }}
             >
-              🟢 Avoid Congestion
+              🟢 Congestion (w3=0.7)
             </button>
           </div>
 
-          {/* Time Weight (alpha) */}
+          {/* Travel Time Weight (w1) */}
           <div className="form-group" style={{ margin: 0 }}>
             <div className="form-label">
-              <span>Time Weight (w_t)</span>
-              <span className="badge badge-cyan">{alphaPct}%</span>
+              <span>w1: Travel Time (τ_ij)</span>
+              <span className="badge badge-cyan">{alphaPct}% (w1={weights.alpha.toFixed(2)})</span>
             </div>
             <input
               type="range"
@@ -310,11 +326,11 @@ export default function ControlPanel({
             />
           </div>
 
-          {/* Distance Weight (beta) */}
+          {/* Distance Weight (w2) */}
           <div className="form-group" style={{ margin: 0 }}>
             <div className="form-label">
-              <span>Distance Weight (w_d)</span>
-              <span className="badge badge-emerald">{betaPct}%</span>
+              <span>w2: Distance (d_ij)</span>
+              <span className="badge badge-emerald">{betaPct}% (w2={weights.beta.toFixed(2)})</span>
             </div>
             <input
               type="range"
@@ -326,11 +342,11 @@ export default function ControlPanel({
             />
           </div>
 
-          {/* Congestion Weight (gamma) */}
+          {/* Congestion Weight (w3) */}
           <div className="form-group" style={{ margin: 0 }}>
             <div className="form-label">
-              <span>Congestion Weight (w_c)</span>
-              <span className="badge badge-amber">{gammaPct}%</span>
+              <span>w3: Congestion Cost (c_ij)</span>
+              <span className="badge badge-amber">{gammaPct}% (w3={weights.gamma.toFixed(2)})</span>
             </div>
             <input
               type="range"

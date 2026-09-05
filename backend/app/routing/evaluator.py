@@ -11,7 +11,7 @@ Calculates:
     LOS = Highway Capacity Manual Level of Service (LOS A through F)
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field                             
 from typing import List, Optional
 
 from app.simulation.emissions import VEHICLE_BASE_SPEEDS, compute_route_emissions

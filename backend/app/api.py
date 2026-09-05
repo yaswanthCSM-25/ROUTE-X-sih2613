@@ -65,9 +65,12 @@ class VehicleItem(BaseModel):
 
 
 class WeightsModel(BaseModel):
-    alpha: float = Field(0.40, description="Weight for travel time (T_norm)")
-    beta: float = Field(0.30, description="Weight for travel distance (D_norm)")
-    gamma: float = Field(0.30, description="Weight for congestion index (C_norm)")
+    w1: Optional[float] = Field(None, description="Weight for Travel Time (tau_ij)")
+    w2: Optional[float] = Field(None, description="Weight for Travel Distance (d_ij)")
+    w3: Optional[float] = Field(None, description="Weight for Congestion Cost (c_ij)")
+    alpha: float = Field(0.40, description="Weight for travel time (alias)")
+    beta: float = Field(0.30, description="Weight for travel distance (alias)")
+    gamma: float = Field(0.30, description="Weight for congestion index (alias)")
 
 
 class IncidentRequest(BaseModel):
@@ -391,11 +394,22 @@ def optimize_routes(req: OptimizeRequest):
         else:
             steps = 4
 
-    # Weights
-    w_dict = {"alpha": req.weights.alpha, "beta": req.weights.beta, "gamma": req.weights.gamma}
-    w_sum = sum(w_dict.values())
+    # Weights (support w1, w2, w3 or alpha, beta, gamma)
+    w1 = req.weights.w1 if req.weights.w1 is not None else req.weights.alpha
+    w2 = req.weights.w2 if req.weights.w2 is not None else req.weights.beta
+    w3 = req.weights.w3 if req.weights.w3 is not None else req.weights.gamma
+
+    w_dict = {"w1": w1, "w2": w2, "w3": w3, "alpha": w1, "beta": w2, "gamma": w3}
+    w_sum = w1 + w2 + w3
     if w_sum > 0:
-        w_dict = {k: v / w_sum for k, v in w_dict.items()}
+        w_dict = {
+            "w1": w1 / w_sum,
+            "w2": w2 / w_sum,
+            "w3": w3 / w_sum,
+            "alpha": w1 / w_sum,
+            "beta": w2 / w_sum,
+            "gamma": w3 / w_sum,
+        }
 
     # Run Benchmark
     result = run_benchmark(
@@ -410,7 +424,7 @@ def optimize_routes(req: OptimizeRequest):
         baseline_method=req.baseline_method,
     )
 
-    # Enrich payload with network nodes & road metadata
+    # Enrich payload with network nodes & road metadata and rigorous mathematical formulation
     result["network"] = _serialize_network(network, traffic_model)
     result["vehicles"] = [
         {
@@ -423,6 +437,24 @@ def optimize_routes(req: OptimizeRequest):
     ]
     result["preset"] = req.preset
     result["selected_algorithm"] = req.algorithm
+    result["mathematical_formulation"] = {
+        "objective_equation": "Minimize Z = w1 * sum tau_ij * x_ijk + w2 * sum d_ij * x_ijk + w3 * sum c_ij * x_ijk",
+        "effective_travel_time_equation": "tau_ij = t_ij^0 * (1 + alpha * c_ij)",
+        "weights": {
+            "w1": round(w_dict["w1"], 4),
+            "w2": round(w_dict["w2"], 4),
+            "w3": round(w_dict["w3"], 4),
+        },
+        "qpso_breakdown": result.get("qpso", {}).get("mathematical_formulation", {}),
+        "baseline_breakdown": result.get("baseline", {}).get("mathematical_formulation", {}),
+        "constraints": [
+            "Customer Visit / Destination Reachability: sum_j x_{o_k, j, k} = 1, sum_i x_{i, d_k, k} = 1",
+            "Flow Conservation: sum_i x_{i, u, k} - sum_j x_{u, j, k} = 0 (for all intermediate nodes)",
+            "Closed Road Prohibitions: x_ijk = 0 for barricaded or non-existent edges",
+            "Road & Fleet Capacity: sum_k PCE_k * x_ijk <= Capacity_ij",
+            "Subtour Elimination (MTZ): u_ik - u_jk + |V| * x_ijk <= |V| - 1",
+        ],
+    }
 
     return result
 

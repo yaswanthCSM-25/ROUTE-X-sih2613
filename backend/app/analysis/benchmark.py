@@ -17,10 +17,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
+from app.models.mathematical_model import (
+    ModelWeights,
+    ObjectiveBreakdown,
+    TrafficRoutingModel,
+)
 from app.optimization.baseline import BaselineResult, run_baseline
 from app.optimization.calibration import CalibrationBounds, calibrate
-from app.optimization.qpso import QPSO
+from app.optimization.genetic_algorithm import GeneticAlgorithm
 from app.optimization.pso_classic import ClassicPSO
+from app.optimization.qpso import QPSO
 from app.optimization.solution import FullSolution, evaluate_routes_as_solution, evaluate_solution
 from app.simulation.graph import (
     RoadNetwork,
@@ -50,9 +56,29 @@ class ProblemDefinition:
 def _solution_summary(solution: FullSolution, runtime_sec: float = 0.0, method_name: str = "") -> dict:
     invalid = sum(1 for vs in solution.vehicle_solutions if not vs.constraint.valid)
     num_veh = len(solution.vehicle_solutions)
+    obj_z = getattr(solution.totals, "objective_z", 0.0)
+    if obj_z == 0.0 and solution.mathematical_objective:
+        obj_z = solution.mathematical_objective.z_value
+
+    math_data = {}
+    if solution.mathematical_objective:
+        math_data = {
+            "w1": solution.mathematical_objective.w1,
+            "w2": solution.mathematical_objective.w2,
+            "w3": solution.mathematical_objective.w3,
+            "travel_time_total": solution.mathematical_objective.travel_time_total,
+            "distance_total": solution.mathematical_objective.distance_total,
+            "congestion_total": solution.mathematical_objective.congestion_total,
+            "travel_time_cost": solution.mathematical_objective.travel_time_cost,
+            "distance_cost": solution.mathematical_objective.distance_cost,
+            "congestion_cost": solution.mathematical_objective.congestion_cost,
+            "z_value": solution.mathematical_objective.z_value,
+            "formula": solution.mathematical_objective.formula,
+        }
 
     return {
         "method": method_name,
+        "objective_z": round(obj_z, 4),
         "distance_total_km": round(solution.totals.distance_total, 2),
         "time_total_min": round(solution.totals.time_total, 2),
         "free_flow_time_total_min": round(solution.totals.free_flow_time_total, 2),
@@ -70,6 +96,7 @@ def _solution_summary(solution: FullSolution, runtime_sec: float = 0.0, method_n
         "valid_rate_pct": round(((num_veh - invalid) / max(1, num_veh)) * 100, 1),
         "capacity_violations": solution.capacity_violations,
         "runtime_sec": round(runtime_sec, 4),
+        "mathematical_formulation": math_data,
     }
 
 
@@ -102,6 +129,13 @@ def run_benchmark(
     out.mkdir(parents=True, exist_ok=True)
 
     w_dict = weights or {"alpha": 0.40, "beta": 0.30, "gamma": 0.30}
+    math_weights = ModelWeights.from_dict(w_dict)
+    math_model = TrafficRoutingModel(
+        network=network,
+        traffic_model=traffic_model,
+        vehicles=vehicles,
+        weights=math_weights,
+    )
 
     # 1. Classical Baseline
     t0 = time.perf_counter()
@@ -128,7 +162,13 @@ def run_benchmark(
 
     # Evaluate Baseline as FullSolution with identical scoring & penalties
     baseline_solution = evaluate_routes_as_solution(
-        network, traffic_model, vehicles, raw_baseline_routes, bounds, weights=w_dict
+        network,
+        traffic_model,
+        vehicles,
+        raw_baseline_routes,
+        bounds,
+        weights=w_dict,
+        mathematical_model=math_model,
     )
     baseline_summary = _solution_summary(
         baseline_solution, runtime_sec=baseline_runtime, method_name=baseline_method
@@ -147,6 +187,8 @@ def run_benchmark(
     optimizer = QPSO(
         dimensions=dimensions,
         fitness_fn=fitness_fn,
+        model=math_model,
+        steps_per_vehicle=steps_per_vehicle,
         num_particles=num_particles,
         num_iterations=num_iterations,
         seed=seed,
@@ -174,6 +216,8 @@ def run_benchmark(
     t0_pso = time.perf_counter()
     pso_optimizer = ClassicPSO(
         dimensions=dimensions,
+        model=math_model,
+        steps_per_vehicle=steps_per_vehicle,
         num_particles=num_particles,
         num_iterations=num_iterations,
         seed=seed,
@@ -195,8 +239,38 @@ def run_benchmark(
     pso_summary["iterations"] = num_iterations
     pso_summary["convergence"] = pso_conv
 
+    # 3c. Classical Genetic Algorithm (GA) Benchmark
+    t0_ga = time.perf_counter()
+    ga_optimizer = GeneticAlgorithm(
+        dimensions=dimensions,
+        model=math_model,
+        steps_per_vehicle=steps_per_vehicle,
+        population_size=num_particles,
+        num_generations=num_iterations,
+        seed=seed,
+    )
+    ga_best_chrom, ga_best_fit, ga_conv, ga_runtime = ga_optimizer.optimize(fitness_fn)
+    ga_solution = evaluate_solution(
+        network,
+        traffic_model,
+        vehicles,
+        ga_best_chrom,
+        steps_per_vehicle,
+        bounds,
+        weights=w_dict,
+    )
+    ga_summary = _solution_summary(
+        ga_solution, runtime_sec=ga_runtime, method_name="genetic_algorithm"
+    )
+    ga_summary["population"] = num_particles
+    ga_summary["generations"] = num_iterations
+    ga_summary["convergence"] = ga_conv
+
     # 4. Comparative Metrics
     comparison_payload = {
+        "objective_z_improvement_pct": calc_improvement(
+            baseline_summary.get("objective_z", 0.0), qpso_summary.get("objective_z", 0.0)
+        ),
         "time_improvement_pct": calc_improvement(
             baseline_summary["time_total_min"], qpso_summary["time_total_min"]
         ),
@@ -219,13 +293,29 @@ def run_benchmark(
             baseline_summary["fitness"], qpso_summary["fitness"]
         ),
         # PSO vs QPSO Improvement
+        "qpso_vs_pso_z_improvement_pct": calc_improvement(
+            pso_summary.get("objective_z", 0.0), qpso_summary.get("objective_z", 0.0)
+        ),
         "qpso_vs_pso_time_improvement_pct": calc_improvement(
             pso_summary["time_total_min"], qpso_summary["time_total_min"]
         ),
         "qpso_vs_pso_fitness_improvement_pct": calc_improvement(
             pso_summary["fitness"], qpso_summary["fitness"]
         ),
+        # GA vs QPSO Improvement
+        "qpso_vs_ga_z_improvement_pct": calc_improvement(
+            ga_summary.get("objective_z", 0.0), qpso_summary.get("objective_z", 0.0)
+        ),
+        "qpso_vs_ga_time_improvement_pct": calc_improvement(
+            ga_summary["time_total_min"], qpso_summary["time_total_min"]
+        ),
+        "qpso_vs_ga_fitness_improvement_pct": calc_improvement(
+            ga_summary["fitness"], qpso_summary["fitness"]
+        ),
         # Deltas for UI badges
+        "objective_z_delta_pct": round(
+            ((qpso_summary.get("objective_z", 0.0) - baseline_summary.get("objective_z", 0.0)) / max(0.001, baseline_summary.get("objective_z", 0.001))) * 100, 2
+        ),
         "time_delta_pct": round(
             ((qpso_summary["time_total_min"] - baseline_summary["time_total_min"]) / max(0.1, baseline_summary["time_total_min"])) * 100, 2
         ),
@@ -302,6 +392,26 @@ def run_benchmark(
             }
             for i, vs in enumerate(pso_solution.vehicle_solutions)
         ],
+        "ga": [
+            {
+                "vehicle_id": vs.vehicle_id,
+                "origin": vehicles[i].origin,
+                "destination": vehicles[i].destination,
+                "path": vs.path,
+                "distance_km": round(vs.metrics.distance_km, 2),
+                "time_min": round(vs.metrics.time_min, 2),
+                "delay_min": round(vs.metrics.delay_min, 2),
+                "congestion": round(vs.metrics.congestion, 2),
+                "fuel_liters": round(vs.metrics.fuel_liters, 3),
+                "co2_kg": round(vs.metrics.co2_kg, 3),
+                "level_of_service": vs.metrics.level_of_service,
+                "avg_speed_kmph": vs.metrics.avg_speed_kmph,
+                "valid": vs.constraint.valid,
+                "violations": vs.constraint.violations,
+                "explanation": getattr(vs, "explanation", ""),
+            }
+            for i, vs in enumerate(ga_solution.vehicle_solutions)
+        ],
     }
 
     # 6. Artifact persistence
@@ -324,6 +434,7 @@ def run_benchmark(
                     "baseline": baseline_summary,
                     "qpso": qpso_summary,
                     "pso": pso_summary,
+                    "ga": ga_summary,
                     "comparison": comparison_payload,
                 },
                 f,
@@ -336,6 +447,7 @@ def run_benchmark(
         "baseline": baseline_summary,
         "qpso": qpso_summary,
         "pso": pso_summary,
+        "ga": ga_summary,
         "comparison": comparison_payload,
         "routes": routes_payload,
         "convergence": qpso_result.convergence,

@@ -27,6 +27,7 @@ class SolutionTotals(NamedTuple):
     delay_total: float = 0.0
     free_flow_time_total: float = 0.0
     avg_los: str = "LOS B"
+    objective_z: float = 0.0
 
 
 @dataclass
@@ -47,6 +48,21 @@ def compute_bounds(values: List[float]) -> Bounds:
     return Bounds(min(values), max(values))
 
 
+def compute_exact_objective_z(
+    travel_time_total: float,
+    distance_total: float,
+    congestion_total: float,
+    w1: float = 0.40,
+    w2: float = 0.30,
+    w3: float = 0.30,
+) -> float:
+    """
+    Mathematical Formulation Objective Z:
+        Z = w1 * sum tau_ij * x_ijk + w2 * sum d_ij * x_ijk + w3 * sum c_ij * x_ijk
+    """
+    return (w1 * travel_time_total) + (w2 * distance_total) + (w3 * congestion_total)
+
+
 def compute_fitness(
     totals: SolutionTotals,
     time_bounds: Bounds,
@@ -55,12 +71,16 @@ def compute_fitness(
     weights: Optional[dict] = None,
 ) -> float:
     """
-    F_final = alpha * T_norm + beta * D_norm + gamma * C_norm + penalty
+    F_final = w1 * T_norm + w2 * D_norm + w3 * C_norm + penalty
     """
     w = weights or DEFAULT_WEIGHTS
+    w1 = w.get("w1", w.get("alpha", 0.4))
+    w2 = w.get("w2", w.get("beta", 0.3))
+    w3 = w.get("w3", w.get("gamma", 0.3))
+
     t_norm = time_bounds.normalize(totals.time_total)
     d_norm = distance_bounds.normalize(totals.distance_total)
     c_norm = congestion_bounds.normalize(totals.congestion_total)
 
-    objective = w.get("alpha", 0.4) * t_norm + w.get("beta", 0.3) * d_norm + w.get("gamma", 0.3) * c_norm
+    objective = (w1 * t_norm) + (w2 * d_norm) + (w3 * c_norm)
     return objective + totals.penalty_total
